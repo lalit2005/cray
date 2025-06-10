@@ -4,9 +4,37 @@
 
 html,
 body {
-  @apply bg-white dark:bg-gray-950;
-
   @media (prefers-color-scheme: dark) {
     color-scheme: dark;
   }
+}
+
+html {
+  @apply bg-zinc-950 text-zinc-300 text-base selection:bg-blue-950/20 selection:text-blue-500 overflow-x-hidden;
+}
+
+input,
+textarea,
+.input-class {
+  @apply bg-zinc-900 text-zinc-300 px-3 py-1 rounded-md placeholder:opacity-40 focus:outline-none text-base w-full;
+}
+
+h2 {
+  @apply text-lg font-medium;
+}
+
+.translucent {
+  @apply bg-zinc-950/70 backdrop-blur-md;
+}
+
+textarea {
+  @apply resize-y px-3 py-2;
+}
+
+div[role="combobox"] {
+  @apply cursor-default;
+}
+
+kbd {
+  @apply bg-zinc-900 text-zinc-400 px-1.5 py-0.5 rounded-md border-b-2 border-zinc-800 text-sm ring-1 ring-zinc-900 shadow-inner shadow-black/20;
 }
