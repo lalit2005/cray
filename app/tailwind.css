@@ -38,3 +38,16 @@ div[role="combobox"] {
 kbd {
   @apply bg-zinc-900 text-zinc-400 px-1.5 py-0.5 rounded-md border-b-2 border-zinc-800 text-sm ring-1 ring-zinc-900 shadow-inner shadow-black/20;
 }
+
+#chatWindow {
+  scrollbar-width: 0;
+}
+
+#chatWindow::-webkit-scrollbar {
+  display: none;
+}
+
+/* 
+* {
+  border: 1px solid red;
+} */
