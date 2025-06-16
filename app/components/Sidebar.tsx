@@ -5,6 +5,65 @@ import { db } from "~/localdb";
 import { useNavigate } from "@remix-run/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import clsx from "clsx";
+import { PlusIcon } from "lucide-react";
+import { useState } from "react";
+import { Dialog, DialogContent } from "./ui/Dialog";
+import { getApiKeys, setApiKey } from "~/lib/apiKeys";
+import { Providers, SUPPORTED_MODELS } from "~/lib/models";
+
+const ApiKeysDialog = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [apiKeys, setApiKeys] = useState(getApiKeys());
+
+  const handleSave = () => {
+    Object.entries(apiKeys).forEach(([provider, key]) => {
+      setApiKey(provider as Providers, key);
+    });
+    setIsOpen(false);
+  };
+
+  return (
+    <>
+      <Button className="w-full py-2" onClick={() => setIsOpen(true)}>
+        <PlusIcon className="mr-1" />
+        API keys
+      </Button>
+
+      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+        <DialogContent
+          title="Manage API Keys"
+          description="These keys will never be stored on the server"
+        >
+          <div className="space-y-4">
+            {Object.keys(SUPPORTED_MODELS).map((provider) => (
+              <div key={provider} className="space-y-1">
+                <label
+                  className="block text-sm font-medium capitalize"
+                  hidden
+                />
+                <input
+                  type="password"
+                  value={apiKeys[provider as Providers] || ""}
+                  onChange={(e) =>
+                    setApiKeys({
+                      ...apiKeys,
+                      [provider as Providers]: e.target.value,
+                    })
+                  }
+                  placeholder={`Enter ${provider} API key`}
+                />
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 space-x-3">
+            <Button onClick={() => setIsOpen(false)}>Cancel</Button>
+            <Button onClick={handleSave}>Save</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+};
 
 export const Sidebar = () => {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -54,15 +113,17 @@ export const Sidebar = () => {
     return () => document.removeEventListener("keydown", handleKeydown);
   }, []);
 
-  const chats = useLiveQuery(() => db.chats.toArray());
+  const chats = useLiveQuery(() =>
+    db.chats.orderBy("createdAt").reverse().toArray()
+  );
 
   const handleNewChat = () => {
     navigate("/?new");
   };
 
   return (
-    <div className="px-4 py-2 relative h-screen">
-      <h1 className="text inline-block">
+    <div className="px-4 py-2 relative h-screen sidebar">
+      <h1 className="text inline-block mt-3">
         C R A Y
         <span className="text text-zinc-600 ml-1 relative top-px">v0.1.0</span>
       </h1>
@@ -100,10 +161,14 @@ export const Sidebar = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-3 left-0 right-0 w-full text-center">
-        <Button className="w-[90%] mx-auto" onClick={handleNewChat}>
-          New chat
-        </Button>
+      <div className="absolute bottom-16 left-0 right-0 w-full px-4 space-y-2">
+        <div className="flex flex-col gap-2">
+          <Button className="w-full py-2" onClick={handleNewChat}>
+            <PlusIcon className="mr-1" />
+            New Chat
+          </Button>
+        </div>
+        <ApiKeysDialog />
       </div>
     </div>
   );

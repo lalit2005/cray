@@ -1,7 +1,8 @@
 import type { MetaFunction } from "@remix-run/node";
 import { Sidebar } from "~/components/Sidebar";
 import { ChatWindow } from "~/components/ChatWindow";
-import { StatusBar } from "~/components/StatusBar";
+import StatusBar from "~/components/StatusBar";
+import { Toaster } from "react-hot-toast";
 
 export const meta: MetaFunction = () => {
   return [
@@ -12,16 +13,17 @@ export const meta: MetaFunction = () => {
 
 export default function Index() {
   return (
-    <div className="flex h-screen items-center justify-center">
-      <div className="grid grid-cols-12 w-screen">
-        <div className="h-screen bg-zinc-900/50 min-h-screen relative min-w-64 left-0 top-0 col-span-2 overflow-scroll">
+    <div className="flex flex-col h-screen">
+      <div className="grid grid-cols-10 overflow-hidden">
+        <aside className="col-span-2 bg-zinc-900/50 overflow-y-auto">
           <Sidebar />
-        </div>
-        <div className="col-span-10 h-screen min-h-screen overflow-scroll w-full">
+        </aside>
+        <main className="col-span-8 overflow-y-auto">
           <ChatWindow />
-        </div>
+        </main>
       </div>
       <StatusBar />
+      <Toaster />
     </div>
   );
 }

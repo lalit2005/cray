@@ -19,6 +19,8 @@ export interface Messages {
   role: Message["role"];
   content: string;
   createdAt: Date;
+  provider: string;
+  model: string;
 }
 
 // export interface KeyVal {
@@ -36,7 +38,7 @@ export class AppDatabase extends Dexie {
     this.version(1.0).stores({
       chats:
         "id, title, createdAt, updatedAt, *tags, *notes, inTrash, isPinned",
-      messages: "id, chatId, role, content, createdAt",
+      messages: "id, chatId, role, content, createdAt, provider, model",
       // keyvals: "id, value",
     });
   }

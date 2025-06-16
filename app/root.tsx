@@ -18,7 +18,15 @@ export const links: LinksFunction = () => [
   },
   {
     rel: "stylesheet",
-    href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
+    href: "https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
+  },
+  {
+    rel: "preconnect",
+    href: "https://rsms.me/",
+  },
+  {
+    rel: "stylesheet",
+    href: "https://rsms.me/inter/inter.css",
   },
 ];
 
@@ -45,5 +53,9 @@ export default function App() {
 }
 
 export function HydrateFallback() {
-  return <p>Loading...</p>;
+  return (
+    <p className="text-zinc-500 animate-pulse absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+      Loading...
+    </p>
+  );
 }
