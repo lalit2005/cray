@@ -5,7 +5,7 @@ import { db } from "~/localdb";
 import { useNavigate } from "@remix-run/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import clsx from "clsx";
-import { KeyIcon, PlusIcon } from "lucide-react";
+import { CircleAlert, KeyIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent } from "./ui/Dialog";
 import { getApiKeys, setApiKey } from "~/lib/apiKeys";
@@ -34,6 +34,12 @@ const ApiKeysDialog = () => {
       <Button className="w-full py-2" onClick={() => setIsOpen(true)}>
         <KeyIcon className="mr-1" />
         API keys
+        {Object.values(apiKeys).every((key) => !key) && (
+          <span className="text-xs text-red-300 p-1 rounded bg-red-800/50 uppercase ml-2">
+            <CircleAlert className="mr-1" />
+            no keys set
+          </span>
+        )}
       </Button>
 
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
