@@ -17,7 +17,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronDown } from "lucide-react";
 import { getApiKey } from "~/lib/apiKeys";
 import { SUPPORTED_MODELS as models } from "~/lib/models";
-import api from "~/lib/axios";
+import api, { API_BASE_URL } from "~/lib/axios";
 
 type LLMProvider =
   | "google"
@@ -84,7 +84,7 @@ export const ChatWindow = () => {
 
   const { input, handleInputChange, handleSubmit, error, status } = useChat({
     id: chatId!,
-    api: "http://localhost:8787/api/chat",
+    api: API_BASE_URL + "chat",
     body: {
       provider: currentProvider,
       model: currentModel,

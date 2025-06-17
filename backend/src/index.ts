@@ -24,7 +24,11 @@ app.use(
   "*",
   cors({
     // any origin can access the API
-    origin: ["http://localhost:5173", "http://localhost:8787"],
+    origin: [
+      "http://localhost:5173",
+      "http://localhost:8787",
+      "https://cray.lalit.sh",
+    ],
     // allow credentials (cookies) to be sent
     credentials: true,
   })
