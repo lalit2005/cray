@@ -3,7 +3,11 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
-    "cf-typegen": "wrangler types --env-interface CloudflareBindings"
+    "cf-typegen": "wrangler types --env-interface CloudflareBindings",
+    "db:generate": "drizzle-kit generate:pg --out migrations --schema ./src/schema.ts",
+    "db:migrate": "drizzle-kit migrate --migrations-folder migrations",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio --port 3001"
   },
   "dependencies": {
     "@ai-sdk/anthropic": "^1.2.12",
@@ -13,6 +17,7 @@
     "@ai-sdk/perplexity": "^1.1.9",
     "@supabase/supabase-js": "^2.50.0",
     "ai": "^4.3.16",
+    "bcrypt-edge": "^0.1.1",
     "drizzle-orm": "^0.44.2",
     "hono": "^4.7.11",
     "postgres": "^3.4.7",
@@ -20,6 +25,9 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20250612.0",
+    "@types/better-sqlite3": "^7.6.13",
+    "dotenv": "^16.5.0",
+    "drizzle-kit": "^0.31.1",
     "wrangler": "^4.19.2"
   }
 }

@@ -43,6 +43,12 @@ export default async function (c: Context) {
       const result = await streamText({
         model: modelInstance,
         messages,
+        onFinish: (msg) => {
+          console.log("Message received:", msg);
+        },
+        onError: (error) => {
+          console.error("Error streaming text:", error);
+        },
       });
 
       c.header("X-Vercel-AI-Data-Stream", "v1");

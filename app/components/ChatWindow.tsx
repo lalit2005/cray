@@ -7,14 +7,17 @@ import {
 } from "./ui/Dropdown";
 import clsx from "clsx";
 import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import rehypeRaw from "rehype-raw";
 import { Button } from "./ui/Button";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { db } from "~/localdb";
-import { useSearchParams, useNavigate } from "@remix-run/react";
+import { useSearchParams, useNavigate, useLocation } from "@remix-run/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronDown } from "lucide-react";
 import { getApiKey } from "~/lib/apiKeys";
 import { SUPPORTED_MODELS as models } from "~/lib/models";
+import api from "~/lib/axios";
 
 type LLMProvider =
   | "google"
@@ -29,20 +32,33 @@ type Message = AISDKMessage & {
   createdAt: Date;
   provider: LLMProvider;
   model: string;
+  loading?: boolean; // Indicates if this is a temporary/loading message
 };
 
 export const ChatWindow = () => {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
-  // Redirect if neither ?new nor ?id is present
+  // Handle initial load and URL state
   useEffect(() => {
-    if (!searchParams.has("new") && !searchParams.has("id")) {
-      navigate("/?new");
+    // Only run this effect once on mount
+    const hasNew = searchParams.has("new");
+    const hasId = searchParams.has("id");
+
+    // If we have an ID, we're good
+    if (hasId) return;
+
+    // If we're at the root with no params, set 'new' param
+    if (location.pathname === "/" && !hasNew) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set("new", "true");
+      navigate(`/?${newParams.toString()}`, { replace: true });
     }
-  }, [searchParams, navigate]);
+  }, []); // Empty dependency array means this runs once on mount
 
   const [currentProvider, setCurrentProvider] = useState<LLMProvider>("google");
   const [currentModel, setCurrentModel] = useState<string>(
@@ -50,6 +66,12 @@ export const ChatWindow = () => {
   );
 
   const chatId = searchParams.get("id");
+  // Keep a ref to always have the latest chatId inside callbacks
+  const chatIdRef = useRef<string | null>(chatId);
+  useEffect(() => {
+    chatIdRef.current = chatId;
+  }, [chatId]);
+
   const messages = useLiveQuery(
     () =>
       chatId
@@ -58,112 +80,64 @@ export const ChatWindow = () => {
     [chatId],
     []
   ) as Message[];
-
   const isLoading = messages === undefined;
 
-  useEffect(() => {
-    const newParam = searchParams.get("new");
-    if (newParam) {
-      // Clear messages by removing chatId from URL
-      navigate("/?new");
-      inputRef.current?.focus();
-    }
-  }, [searchParams]);
-
   const { input, handleInputChange, handleSubmit, error, status } = useChat({
-    api: "http://localhost:8787/chat",
+    id: chatId!,
+    api: "http://localhost:8787/api/chat",
     body: {
       provider: currentProvider,
       model: currentModel,
       apiKey: getApiKey(currentProvider),
     },
-    onFinish: (msg) => {
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    sendExtraMessageFields: true,
+    onFinish: async (msg) => {
       console.log("msg", msg);
-      if (!chatId) return;
+      const currentId = chatIdRef.current;
+      if (!currentId) return;
 
-      db.messages.add({
-        id: msg.id,
-        chatId,
-        role: msg.role as Message["role"],
-        content: msg.content,
-        createdAt: new Date(),
-        provider: currentProvider,
-        model: currentModel,
-      });
+      // Find the empty assistant message and update it
+      const assistantMsg = await db.messages
+        .where({ chatId: currentId, role: "assistant", content: "" })
+        .first();
+      if (assistantMsg) {
+        await db.messages.update(assistantMsg.id, {
+          content: msg.content,
+          loading: false,
+        });
+      } else {
+        // fallback: just add the message
+        await db.messages.add({
+          id: msg.id,
+          chatId: currentId,
+          role: msg.role as Message["role"],
+          content: msg.content,
+          createdAt: new Date(),
+          provider: currentProvider,
+          model: currentModel,
+        });
+      }
 
       inputRef.current?.focus();
-
-      // Scroll to bottom
-      const scrollToBottom = () => {
-        console.log("Attempting to scroll...");
-        if (!messagesContainerRef.current) {
-          console.log("No container ref");
-          return;
-        }
-
-        const { scrollHeight, clientHeight } = messagesContainerRef.current;
-        console.log(
-          `ScrollHeight: ${scrollHeight}, ClientHeight: ${clientHeight}`
-        );
-
-        // Add small offset to ensure scrolling works
-        messagesContainerRef.current.scrollTo({
-          top: scrollHeight - clientHeight + 1,
-          behavior: "smooth",
-        });
-      };
-
-      const timer = setTimeout(scrollToBottom, 100);
-      return () => clearTimeout(timer);
+    },
+    onError: (error) => {
+      console.error("Error streaming text:", error);
     },
     initialMessages: messages,
   });
 
-  useEffect(() => {
-    // Scroll to bottom when messages change
-    const scrollToBottom = () => {
-      console.log("Attempting to scroll...");
-      if (!messagesContainerRef.current) {
-        console.log("No container ref");
-        return;
-      }
-
-      const { scrollHeight, clientHeight } = messagesContainerRef.current;
-      console.log(
-        `ScrollHeight: ${scrollHeight}, ClientHeight: ${clientHeight}`
-      );
-
-      // Add small offset to ensure scrolling works
-      messagesContainerRef.current.scrollTo({
-        top: scrollHeight - clientHeight + 1,
-        behavior: "smooth",
-      });
-    };
-
-    const timer = setTimeout(scrollToBottom, 100);
-    return () => clearTimeout(timer);
-  }, [messages]);
-
-  useEffect(() => {
-    const handleKeydown = (e: KeyboardEvent) => {
-      if (
-        e.key === "/" &&
-        e.ctrlKey &&
-        !(
-          e.target instanceof HTMLInputElement ||
-          e.target instanceof HTMLTextAreaElement
-        )
-      ) {
-        e.preventDefault();
-        inputRef.current?.focus();
-      }
-    };
-    window.addEventListener("keydown", handleKeydown, { capture: true });
-    return () => window.removeEventListener("keydown", handleKeydown);
-  }, [inputRef]);
-
-  const sendMessage = async () => {
+  const handleSendMessage = async () => {
     if (input.trim() === "") return;
+    // If no existing chatId and not already in new mode, mark chat as new
+    if (!chatId && !searchParams.has("new")) {
+      const newParams = new URLSearchParams(searchParams);
+      newParams.set("new", "true");
+      navigate(`/?${newParams.toString()}`, { replace: true });
+    }
 
     let currentChatId = chatId;
     if (!currentChatId) {
@@ -181,6 +155,8 @@ export const ChatWindow = () => {
         messages: [],
       });
       navigate(`/?id=${currentChatId}`);
+      // Update chatIdRef so onFinish callback can access the new ID
+      chatIdRef.current = currentChatId;
     }
 
     // Store user message
@@ -194,12 +170,48 @@ export const ChatWindow = () => {
       model: currentModel,
     });
 
+    // Add empty assistant message with loading flag
+    const assistantMessageId = crypto.randomUUID();
+    await db.messages.add({
+      id: assistantMessageId,
+      chatId: currentChatId,
+      role: "assistant",
+      content: "",
+      createdAt: new Date(),
+      provider: currentProvider,
+      model: currentModel,
+      loading: true,
+    } as any);
+
     // Update chat's updatedAt
     await db.chats.update(currentChatId, { updatedAt: new Date() });
 
     // Submit to assistant
     handleSubmit();
   };
+
+  const scrollToBottom = () => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  };
+
+  useEffect(() => {
+    scrollToBottom();
+  }, [messages]);
+
+  useEffect(() => {
+    const handleKeydown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "/") {
+        e.preventDefault();
+        inputRef.current?.focus();
+      }
+    };
+
+    window.addEventListener("keydown", handleKeydown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeydown);
+    };
+  }, []);
 
   return (
     <div className="h-screen relative">
@@ -233,14 +245,61 @@ export const ChatWindow = () => {
                       : "bg-zinc-950 border-2 border-zinc-900 bg-gradient-to-br from-zinc-900 via-zinc-800/30 to-zinc-900"
                   )}
                 >
-                  <div className="prose prose-invert max-w-none">
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
-                  </div>
+                  {message.role === "assistant" &&
+                  message.loading &&
+                  !message.content ? (
+                    <span className="animate-pulse text-zinc-400">
+                      Generating...
+                    </span>
+                  ) : (
+                    <div className="prose prose-invert max-w-none overflow-x-auto">
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm]}
+                        rehypePlugins={[rehypeRaw]}
+                        components={{
+                          table: ({ node, ...props }) => (
+                            <div className="overflow-x-auto">
+                              <table
+                                className="min-w-full divide-y divide-zinc-700"
+                                {...props}
+                              />
+                            </div>
+                          ),
+                          thead: ({ node, ...props }) => (
+                            <thead className="bg-zinc-800" {...props} />
+                          ),
+                          tbody: ({ node, ...props }) => (
+                            <tbody
+                              className="divide-y divide-zinc-700"
+                              {...props}
+                            />
+                          ),
+                          tr: ({ node, ...props }) => (
+                            <tr className="hover:bg-zinc-800/50" {...props} />
+                          ),
+                          th: ({ node, ...props }) => (
+                            <th
+                              className="px-4 py-2 text-left text-sm font-semibold text-zinc-200"
+                              {...props}
+                            />
+                          ),
+                          td: ({ node, ...props }) => (
+                            <td
+                              className="px-4 py-2 text-sm text-zinc-300"
+                              {...props}
+                            />
+                          ),
+                        }}
+                      >
+                        {message.content}
+                      </ReactMarkdown>
+                    </div>
+                  )}
                   <div className="mt-2 text-xs opacity-70 flex justify-between items-center">
-                    <span className="capitalize">
+                    <span className="capitalize mr-1">
                       {message.role === "assistant" ? message.provider : "You"}
                     </span>
-                    <span>
+                    <span className="ml-1">
                       {new Date(
                         message.createdAt || Date.now()
                       ).toLocaleTimeString()}
@@ -249,6 +308,7 @@ export const ChatWindow = () => {
                 </div>
               </div>
             ))}
+            <div ref={messagesEndRef} />
           </div>
         )}
       </div>
@@ -282,7 +342,9 @@ export const ChatWindow = () => {
             <div className="flex-1 relative shadow-2xl shadow-black">
               <textarea
                 autoFocus
-                className="w-full p-4 pr-20 rounded-t-xl resize-none focus:outline-none border-2 border-zinc-800/50 border-b-0 inset-shadow"
+                className={
+                  "w-full p-4 pr-20 rounded-t-xl resize-none focus:outline-none border-2 border-zinc-800/50 border-b-0 inset-shadow"
+                }
                 placeholder={
                   messages.length == 0
                     ? "Start a conversation"
@@ -294,9 +356,12 @@ export const ChatWindow = () => {
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
-                    sendMessage();
+                    if (status !== "streaming") {
+                      handleSendMessage();
+                    }
                   }
                 }}
+                disabled={status === "streaming"}
                 ref={inputRef}
               />
             </div>
@@ -305,11 +370,18 @@ export const ChatWindow = () => {
           <div className="disabled:opacity-50 disabled:cursor-wait w-full bg-gradient-to-b from-zinc-900 via-zinc-800/50 to-zinc-900 rounded-b-xl py-2 px-3 relative -top-5 inset-shadow border-2 border-zinc-800/50 backdrop-blur-xl">
             <div className="flex space-x-2">
               <Button
-                onClick={sendMessage}
-                className="bg-opacity-100!"
-                disabled={status === "streaming"}
+                onClick={handleSendMessage}
+                className={clsx(
+                  "bg-opacity-100! relative overflow-hidden",
+                  status === "streaming" || status === "submitted"
+                    ? "opacity-80 cursor-not-allowed"
+                    : ""
+                )}
+                disabled={input.trim() === "" || status === "streaming"}
               >
-                Send
+                {status === "streaming" || status === "submitted"
+                  ? "Answering..."
+                  : "Send"}
               </Button>
               <div className="relative">
                 <DropdownMenu>
@@ -323,9 +395,11 @@ export const ChatWindow = () => {
                     {Object.keys(models).map((provider) => (
                       <DropdownMenuItem
                         key={provider}
-                        onClick={() =>
-                          setCurrentProvider(provider as LLMProvider)
-                        }
+                        onClick={() => {
+                          setCurrentProvider(provider as LLMProvider);
+                          // Set the first model from the new provider
+                          setCurrentModel(models[provider as LLMProvider][0]);
+                        }}
                       >
                         {provider}
                       </DropdownMenuItem>
@@ -342,10 +416,13 @@ export const ChatWindow = () => {
                     </Button>
                   </DropdownMenuTrigger>
                   <DropdownMenuContent>
-                    {models[currentProvider].map((model) => (
+                    {models[currentProvider as LLMProvider].map((model) => (
                       <DropdownMenuItem
                         key={model}
-                        onClick={() => setCurrentModel(model)}
+                        onClick={() => {
+                          setCurrentModel(model);
+                          setTimeout(() => inputRef.current?.focus(), 100);
+                        }}
                       >
                         {model
                           .split("/")

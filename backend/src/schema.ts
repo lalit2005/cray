@@ -16,10 +16,27 @@ export interface Message {
   model: string;
 }
 
+export interface User {
+  userId: string;
+  name: string;
+  createdAt: Date;
+  passwordHash: string;
+  email: string;
+}
+
+export const users = pgTable("users", {
+  userId: uuid("user_id").primaryKey().defaultRandom(),
+  name: text("name").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  passwordHash: text("password_hash").notNull(),
+  email: text("email").notNull(),
+});
+
 export const chats = pgTable("chats", {
   id: uuid("id").primaryKey().defaultRandom(),
   title: text("title").notNull(),
   createdAt: timestamp("created_at").defaultNow(),
+  userId: uuid("user_id").notNull(),
   updatedAt: timestamp("updated_at").defaultNow(),
   tags: jsonb("tags").$type<string[]>(),
   notes: text("notes"),
@@ -29,6 +46,7 @@ export const chats = pgTable("chats", {
 });
 
 export const schema = {
+  users,
   chats,
 };
 

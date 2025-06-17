@@ -11,7 +11,23 @@ export const meta: MetaFunction = () => {
   ];
 };
 
+import { useAuth } from "~/lib/auth";
+import { useNavigate } from "@remix-run/react";
+
 export default function Index() {
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+  if (!loading && !user) {
+    navigate("/login");
+    return null;
+  }
+  if (loading) {
+    return (
+      <p className="text-zinc-500 animate-pulse absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
+        Loading...
+      </p>
+    );
+  }
   return (
     <div className="flex flex-col h-screen">
       <div className="grid grid-cols-10 overflow-hidden">

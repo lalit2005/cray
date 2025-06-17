@@ -39,7 +39,6 @@ export const SUPPORTED_MODELS = {
     "x-ai/grok-3-beta",
     "x-ai/grok-3-mini-beta",
     "mistralai/devstral-small:free",
-    "sarvamai/sarvam-m:free",
     "meta-llama/llama-3.3-8b-instruct:free",
   ],
 };

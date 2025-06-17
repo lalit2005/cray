@@ -5,11 +5,18 @@ import { db } from "~/localdb";
 import { useNavigate } from "@remix-run/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import clsx from "clsx";
-import { PlusIcon } from "lucide-react";
+import { KeyIcon, PlusIcon } from "lucide-react";
 import { useState } from "react";
 import { Dialog, DialogContent } from "./ui/Dialog";
 import { getApiKeys, setApiKey } from "~/lib/apiKeys";
 import { Providers, SUPPORTED_MODELS } from "~/lib/models";
+import { useAuth } from "~/lib/auth";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "./ui/Dropdown";
 
 const ApiKeysDialog = () => {
   const [isOpen, setIsOpen] = useState(false);
@@ -25,7 +32,7 @@ const ApiKeysDialog = () => {
   return (
     <>
       <Button className="w-full py-2" onClick={() => setIsOpen(true)}>
-        <PlusIcon className="mr-1" />
+        <KeyIcon className="mr-1" />
         API keys
       </Button>
 
@@ -68,6 +75,11 @@ const ApiKeysDialog = () => {
 export const Sidebar = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const navigate = useNavigate();
+  const { user, logout } = useAuth();
+
+  const handleNewChat = () => {
+    navigate("/?new");
+  };
 
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
@@ -82,6 +94,9 @@ export const Sidebar = () => {
       ) {
         e.preventDefault();
         inputRef.current?.focus();
+      } else if (e.ctrlKey && e.key === "i") {
+        e.preventDefault();
+        handleNewChat();
       }
     };
     window.addEventListener("keydown", handleKeydown, { capture: true });
@@ -117,10 +132,6 @@ export const Sidebar = () => {
     db.chats.orderBy("createdAt").reverse().toArray()
   );
 
-  const handleNewChat = () => {
-    navigate("/?new");
-  };
-
   return (
     <div className="px-4 py-2 relative h-screen sidebar">
       <h1 className="text inline-block mt-3">
@@ -148,7 +159,7 @@ export const Sidebar = () => {
                   to={`/?id=${chat.id}`}
                   tabIndex={0}
                   className={clsx(
-                    "overflow-hidden sm:rounded-xs px-2 py-1 my-3 ring ring-zinc-900 sm:border border-zinc-900 focus:outline-none block sm:bg-gradient-to-br from-zinc-900/20 to-zinc-900/70 hover:from-zinc-900/40 hover:to-zinc-900/80 focus:from-zinc-900/40 focus:to-zinc-900/80 focus:ring focus:ring-zinc-800 relative"
+                    "overflow-hidden px-2 py-1 my-3 ring ring-zinc-900 sm:border border-zinc-900 focus:outline-none block sm:bg-gradient-to-br from-zinc-900/20 to-zinc-900/70 hover:from-zinc-900/40 hover:to-zinc-900/80 focus:from-zinc-900/40 focus:to-zinc-900/80 focus:ring focus:ring-zinc-800 relative"
                   )}
                 >
                   <p className="text-sm">
@@ -164,11 +175,23 @@ export const Sidebar = () => {
       <div className="absolute bottom-16 left-0 right-0 w-full px-4 space-y-2">
         <div className="flex flex-col gap-2">
           <Button className="w-full py-2" onClick={handleNewChat}>
-            <PlusIcon className="mr-1" />
             New Chat
+            <span className="font-mono text-xs uppercase ml-1">
+              <kbd>ctrl</kbd>+<kbd>i</kbd>
+            </span>
           </Button>
         </div>
         <ApiKeysDialog />
+        <DropdownMenu>
+          <DropdownMenuTrigger>
+            <div className="px-2 py-1 hover:bg-zinc-800 w-full text-center mx-auto">
+              Signed in as {user?.name}
+            </div>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
     </div>
   );

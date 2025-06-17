@@ -26,6 +26,7 @@
     "@remix-run/react": "^2.16.8",
     "@tailwindcss/typography": "^0.5.10",
     "ai": "^4.3.16",
+    "axios": "^1.10.0",
     "clsx": "^2.1.0",
     "date-fns": "^3.6.0",
     "dexie": "^3.2.7",
@@ -38,7 +39,9 @@
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
     "react-hot-toast": "^2.5.2",
-    "react-markdown": "^10.1.0"
+    "react-markdown": "^10.1.0",
+    "rehype-raw": "^7.0.0",
+    "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
     "@remix-run/dev": "^2.16.8",
