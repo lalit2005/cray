@@ -1,12 +1,17 @@
-import { Link } from "@remix-run/react";
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { Link, useNavigate } from "@remix-run/react";
 import { Button } from "./ui/Button";
 import { db } from "~/localdb";
-import { useNavigate } from "@remix-run/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import clsx from "clsx";
-import { CircleAlert, KeyIcon, PlusIcon } from "lucide-react";
-import { useState } from "react";
+import {
+  CircleAlert,
+  KeyIcon,
+  UserIcon,
+  Database as DatabaseIcon,
+  LogOut as LogOutIcon,
+  GithubIcon,
+} from "lucide-react";
 import { Dialog, DialogContent } from "./ui/Dialog";
 import { getApiKeys, setApiKey } from "~/lib/apiKeys";
 import { Providers, SUPPORTED_MODELS } from "~/lib/models";
@@ -50,10 +55,9 @@ const ApiKeysDialog = () => {
           <div className="space-y-4">
             {Object.keys(SUPPORTED_MODELS).map((provider) => (
               <div key={provider} className="space-y-1">
-                <label
-                  className="block text-sm font-medium capitalize"
-                  hidden
-                />
+                <label className="block text-sm font-medium capitalize mb-1 text-zinc-600">
+                  {provider} API Key
+                </label>
                 <input
                   type="password"
                   value={apiKeys[provider as Providers] || ""}
@@ -83,9 +87,9 @@ export const Sidebar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
 
-  const handleNewChat = () => {
+  const handleNewChat = useCallback(() => {
     navigate("/?new");
-  };
+  }, [navigate]);
 
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
@@ -107,7 +111,7 @@ export const Sidebar = () => {
     };
     window.addEventListener("keydown", handleKeydown, { capture: true });
     return () => window.removeEventListener("keydown", handleKeydown);
-  }, [inputRef]);
+  }, [inputRef, handleNewChat]);
 
   useEffect(() => {
     const handleKeydown = (e: KeyboardEvent) => {
@@ -135,9 +139,25 @@ export const Sidebar = () => {
   }, []);
 
   const chats = useLiveQuery(() =>
-    db.chats.orderBy("createdAt").reverse().toArray()
+    db.chats.orderBy("updatedAt").reverse().toArray()
   );
 
+  const [results, setResults] = useState(chats || []);
+  useEffect(() => {
+    setResults(chats || []);
+  }, [chats]);
+
+  useEffect(() => {
+    if (inputRef.current) {
+      inputRef.current.addEventListener("input", () => {
+        const query = inputRef.current?.value.toLowerCase() || "";
+        const filteredResults = chats?.filter((chat) =>
+          chat.title.toLowerCase().includes(query)
+        );
+        setResults(filteredResults || []);
+      });
+    }
+  }, [chats]);
   return (
     <div className="px-4 py-2 relative h-screen sidebar">
       <h1 className="text inline-block mt-3">
@@ -157,9 +177,9 @@ export const Sidebar = () => {
             <span className="text-zinc-400">/</span>
           </div>
         </div>
-        <div className="mt-4">
+        <div className="mt-4 max-h-[65vh] overflow-y-auto">
           <ul>
-            {chats?.map((chat, index) => (
+            {results?.map((chat) => (
               <li key={chat.id} tabIndex={-1}>
                 <Link
                   to={`/?id=${chat.id}`}
@@ -189,13 +209,58 @@ export const Sidebar = () => {
         </div>
         <ApiKeysDialog />
         <DropdownMenu>
-          <DropdownMenuTrigger>
-            <div className="px-2 py-1 hover:bg-zinc-800 w-full text-center mx-auto">
-              Signed in as {user?.name}
+          <DropdownMenuTrigger className="w-full">
+            <div className="block w-full px-2 py-1  hover:bg-zinc-900 text-left rounded-md border border-zinc-800 focus:outline-none focus:ring-0">
+              <div className="flex items-center justify-start">
+                <UserIcon className="rounded p-1 !h-8 !w-8 -mb-1" />
+                <div className="flex flex-col items-start">
+                  <span className="text-sm font-medium">
+                    Signed in as {user?.name}
+                  </span>
+                  {user?.email && (
+                    <span className="text-xs text-zinc-400">{user?.email}</span>
+                  )}
+                </div>
+              </div>
             </div>
           </DropdownMenuTrigger>
           <DropdownMenuContent>
-            <DropdownMenuItem onClick={logout}>Logout</DropdownMenuItem>
+            <DropdownMenuItem>
+              <div className="flex items-center gap-2">
+                <UserIcon className="w-4 h-4" />
+                <span>{user?.name}</span>
+                <span className="text-xs text-zinc-400">{user?.email}</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                window.open(
+                  "https://github.com/lalit2005/cray/issues/new",
+                  "_blank"
+                )
+              }
+            >
+              <div className="flex items-center gap-2">
+                <DatabaseIcon className="w-4 h-4" />
+                <span>Feedback</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={() =>
+                window.open("https://github.com/lalit2005/cray", "_blank")
+              }
+            >
+              <div className="flex items-center gap-2">
+                <GithubIcon className="w-4 h-4" />
+                <span>GitHub</span>
+              </div>
+            </DropdownMenuItem>
+            <DropdownMenuItem onClick={logout}>
+              <div className="flex items-center gap-2 text-red-400">
+                <LogOutIcon className="w-4 h-4" />
+                <span>Logout</span>
+              </div>
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
       </div>

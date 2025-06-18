@@ -7,7 +7,6 @@ interface User {
   email: string;
   name: string;
   userId: string;
-  role?: string;
 }
 
 interface LoginInput {

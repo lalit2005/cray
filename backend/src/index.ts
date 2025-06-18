@@ -1,16 +1,14 @@
 import { Context, Hono, Next } from "hono";
 import { cors } from "hono/cors";
 import { createDbClient, schema } from "./db";
-import { and, eq } from "drizzle-orm";
-import { Message } from "./schema";
-import chat from "./routes/chat";
+import { and, eq, gt, gte, or } from "drizzle-orm";
 import { User } from "./schema";
 import { sign, verify } from "hono/jwt";
 import { getCookie } from "hono/cookie";
 import { genSaltSync, hashSync, compareSync } from "bcrypt-edge";
-import { DataStreamWriter, pipeDataStreamToResponse } from "ai";
-import { stream } from "hono/streaming";
-import { mockChat } from "./routes/mockChat";
+import { mockChat } from "./lib/mockChat";
+import { sync } from "./lib/sync";
+import { SyncRequest, SyncResponse } from "./lib/sync-interface";
 
 const app = new Hono<{
   Variables: {
@@ -189,113 +187,61 @@ app.post("/chat", authMiddleware, async (c) => {
   // return await chat(c);
 });
 
-// create a new chat
-app.post("/chats", authMiddleware, async (c) => {
-  try {
-    const { title, notes, tags } = await c.req.json();
-    const newChat = await c.var.db
-      .insert(schema.chats)
-      .values({
-        title,
-        notes: notes || "",
-        tags: tags || [],
-        messages: [],
-        userId: c.get("user").userId,
-      })
-      .returning();
-    return c.json(newChat, 201);
-  } catch (err) {
-    console.error("Error creating chat:", err);
-    return c.json({ error: "Failed to create chat" }, 500);
-  }
+// Sync endpoint: handle bidirectional sync of chats
+app.post("/sync", authMiddleware, async (c) => {
+  return await sync(c);
 });
 
-// get all chats
-app.get("/chats", authMiddleware, async (c) => {
-  try {
-    const chats = await c.var.db
-      .select()
-      .from(schema.chats)
-      .where(eq(schema.chats.userId, c.get("user").userId));
-    return c.json(chats);
-  } catch (err) {
-    console.error("Error fetching chats:", err);
-    return c.json({ error: "Failed to fetch chats" }, 500);
-  }
-});
+// fetch records since lastSyncedAt
+app.post("/fetch-new-records", authMiddleware, async (c) => {
+  const db = c.var.db;
+  const userId = c.get("user");
 
-// add a message to a chat
-app.post("/chats/:id/messages", authMiddleware, async (c) => {
-  try {
-    const chatId = c.req.param("id");
-    const { role, content } = await c.req.json();
+  const body: SyncRequest = await c.req.json();
+  const { lastSyncedAt } = body;
 
-    const chat = await c.var.db
-      .select()
-      .from(schema.chats)
-      .where(
-        and(
-          eq(schema.chats.id, chatId),
-          eq(schema.chats.userId, c.get("user").userId)
+  const serverChanges: SyncResponse = {
+    serverChanges: [],
+  };
+
+  // Fetch both newly created chats AND chats with updated messages since lastSyncedAt
+  const newChats = await db
+    .select()
+    .from(schema.chats)
+    .where(
+      and(
+        eq(schema.chats.userId, userId.userId),
+        or(
+          gt(
+            schema.chats.createdAt,
+            new Date(lastSyncedAt || "").toISOString()
+          ),
+          gt(schema.chats.updatedAt, new Date(lastSyncedAt || "").toISOString())
         )
       )
-      .limit(1);
+    );
 
-    if (!chat[0]) {
-      return c.json({ error: "Chat not found" }, 404);
-    }
+  serverChanges.serverChanges = newChats.map((c) => ({
+    ...c,
+    createdAt: c.createdAt || "",
+    updatedAt: c.updatedAt || "",
+    inTrash: !!c.inTrash,
+    isPinned: !!c.isPinned,
+    tags: c.tags || [],
+    notes: c.notes || "",
+    userId: c.userId || "",
+    title: c.title || "",
+    messages: c.messages
+      ? c.messages.map((m) => ({
+          ...m,
+          createdAt: m.createdAt,
+        }))
+      : [],
+  }));
 
-    const currentMessages = chat[0].messages || [];
+  console.log({ serverChanges });
 
-    const newMessage: Message = {
-      id: crypto.randomUUID(),
-      role,
-      content,
-      createdAt: new Date(),
-      provider: "openai",
-      model: "gpt-4o",
-    };
-
-    const updatedChat = await c.var.db
-      .update(schema.chats)
-      .set({
-        messages: [...currentMessages, newMessage],
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(schema.chats.id, chatId),
-          eq(schema.chats.userId, c.get("user").userId)
-        )
-      )
-      .returning();
-
-    return c.json(updatedChat[0], 200);
-  } catch (err) {
-    console.error("Error adding message:", err);
-    return c.json({ error: "Failed to add message" }, 500);
-  }
-});
-
-// get a chat
-app.get("/chats/:id", authMiddleware, async (c) => {
-  try {
-    const chatId = c.req.param("id");
-    const chat = await c.var.db
-      .select()
-      .from(schema.chats)
-      .where(
-        and(
-          eq(schema.chats.id, chatId),
-          eq(schema.chats.userId, c.get("user").userId)
-        )
-      )
-      .limit(1);
-    return c.json(chat[0]);
-  } catch (err) {
-    console.error("Error fetching chat:", err);
-    return c.json({ error: "Failed to fetch chat" }, 500);
-  }
+  return c.json(serverChanges);
 });
 
 export default app;

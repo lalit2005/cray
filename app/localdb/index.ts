@@ -21,25 +21,43 @@ export interface Messages {
   createdAt: Date;
   provider: string;
   model: string;
+  loading?: boolean; // Added for tracking message generation status
 }
 
-// export interface KeyVal {
-//   id: "latestLocalCommitSha" | "latestLocalCommitTime" | "localLastUpdatedTime";
-//   value: string;
-// }
+export interface KeyVal {
+  id: "lastSyncedAt";
+  value: string; // ISO timestamp
+}
 
 export class AppDatabase extends Dexie {
   chats!: Table<Chats>;
   messages!: Table<Messages>;
-  // keyvals!: Table<KeyVal>;
+  keyvals!: Table<KeyVal>;
 
   constructor() {
     super("cray");
-    this.version(1.0).stores({
+    // database version 1: initial schema (no keyvals)
+    this.version(1).stores({
       chats:
         "id, title, createdAt, updatedAt, *tags, *notes, inTrash, isPinned",
       messages: "id, chatId, role, content, createdAt, provider, model",
-      // keyvals: "id, value",
+    });
+
+    // database version 2: add keyvals store for metadata
+    this.version(2).stores({
+      chats:
+        "id, title, createdAt, updatedAt, *tags, *notes, inTrash, isPinned",
+      messages: "id, chatId, role, content, createdAt, provider, model",
+      keyvals: "id, value",
+    });
+
+    // database version 3: add loading field to messages
+    this.version(3).stores({
+      chats:
+        "id, title, createdAt, updatedAt, *tags, *notes, inTrash, isPinned",
+      messages:
+        "id, chatId, role, content, createdAt, provider, model, loading",
+      keyvals: "id, value",
     });
   }
 }
