@@ -33,25 +33,36 @@ app.use(
 );
 
 const authMiddleware = async (c: Context, next: Next) => {
-  // Try to grab token from multiple possible locations (cookie or headers)
-  const token = (getCookie(c, "token") ||
-    // Standard "Authorization: Bearer <token>" header
-    c.req.header("authorization")?.split(" ")[1] ||
-    // Fallback non-standard "token: <token>" header
-    c.req.header("token")) as string;
-  if (!token) return c.json({ error: "Unauthorized" }, 401);
-
   try {
-    const decoded = (await verify(token, c.get("JWT_SECRET"))) as {
+    // Improved token extraction with better logging
+    const token =
+      getCookie(c, "token") ||
+      c.req.header("authorization")?.split(" ")[1] ||
+      c.req.header("token");
+
+    if (!token) {
+      console.log("[Auth] No token found");
+      return c.json({ error: "Unauthorized - No token provided" }, 401);
+    }
+
+    const JWT_SECRET = c.get("JWT_SECRET");
+    if (!JWT_SECRET) {
+      console.error("[Auth] JWT_SECRET not available in context");
+      return c.json({ error: "Server configuration error" }, 500);
+    }
+
+    const decoded = (await verify(token, JWT_SECRET)) as {
       email: string;
       userId: string;
       name: string;
     };
-    // Set the user in context with all the decoded data
+
+    console.log(`[Auth] Successful verification for user: ${decoded.email}`);
     c.set("user", decoded);
     await next();
   } catch (err) {
-    return c.json({ error: "Invalid token" }, 401);
+    console.error("[Auth] Token verification failed:", err);
+    return c.json({ error: "Invalid or expired token" }, 401);
   }
 };
 
@@ -117,7 +128,9 @@ app.post("/signup", async (c) => {
   // Set HttpOnly Secure Cookie
   c.header(
     "Set-Cookie",
-    `token=${token}; HttpOnly; Secure; SameSite=None; Path=/`
+    `token=${token}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${
+      60 * 60 * 24 * 7
+    }`
   );
 
   // Return user data without sensitive information
@@ -158,7 +171,9 @@ app.post("/login", async (c) => {
   // Set HttpOnly Secure Cookie
   c.header(
     "Set-Cookie",
-    `token=${token}; HttpOnly; Secure; SameSite=None; Path=/`
+    `token=${token}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${
+      60 * 60 * 24 * 7
+    }`
   );
 
   // Return user data without sensitive information
@@ -173,7 +188,9 @@ app.post("/login", async (c) => {
 app.post("/logout", async (c) => {
   c.header(
     "Set-Cookie",
-    `token=; HttpOnly; Secure; SameSite=None; Path=/; Max-Age=0`
+    `token=${token}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${
+      60 * 60 * 24 * 7
+    }`
   );
   return c.json({ message: "Logged out" });
 });
