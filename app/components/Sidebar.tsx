@@ -106,7 +106,7 @@ export const Sidebar = () => {
       ) {
         e.preventDefault();
         inputRef.current?.focus();
-      } else if (e.ctrlKey && e.key === "i") {
+      } else if ((e.metaKey || e.ctrlKey) && e.key === "i") {
         e.preventDefault();
         handleNewChat();
       }
@@ -220,7 +220,9 @@ export const Sidebar = () => {
                   >
                     <p className="text-sm">
                       {chat.title +
-                        (import.meta.env.DEV && " - " + chat.id.slice(0, 5))}
+                        (import.meta.env.DEV
+                          ? " - " + chat.id.slice(0, 5)
+                          : "")}
                       <span className="ml-2 absolute right-2">
                         {chat.isPinned ? (
                           <PinIcon className="w-4 h-4 text-amber-500" />
@@ -240,10 +242,9 @@ export const Sidebar = () => {
       <div className="absolute bottom-16 left-0 right-0 w-full px-4 space-y-2">
         <div className="flex flex-col gap-2">
           <Button className="w-full py-2" onClick={handleNewChat}>
-            New Chat
-            <span className="font-mono text-xs uppercase ml-1">
-              <kbd>ctrl</kbd>+<kbd>i</kbd>
-            </span>
+            <MessageSquare className="mr-1" />
+            New chat
+            <span className="text-xs text-zinc-400 ml-auto">CMD + I</span>
           </Button>
         </div>
         <ApiKeysDialog />

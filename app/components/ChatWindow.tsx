@@ -872,7 +872,7 @@ export const ChatWindow = () => {
               </div>
               <div className="absolute right-2 bottom-2 flex items-center gap-1">
                 <kbd className="px-1.5 py-0.5 text-xs rounded bg-zinc-900 uppercase -mb-1">
-                  {navigator.userAgent.includes("Mac") ? "⌘" : "Ctrl"} /
+                  {navigator.userAgent.includes("Mac") ? "CMD" : "Ctrl"} /
                 </kbd>
                 <span className="text-xs text-zinc-500">to focus</span>
               </div>
