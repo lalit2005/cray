@@ -242,9 +242,11 @@ export const Sidebar = () => {
       <div className="absolute bottom-16 left-0 right-0 w-full px-4 space-y-2">
         <div className="flex flex-col gap-2">
           <Button className="w-full py-2" onClick={handleNewChat}>
-            <MessageSquare className="mr-1" />
-            New chat
-            <span className="text-xs text-zinc-400 ml-auto">CMD + I</span>
+            New Chat
+            <span className="font-mono text-xs uppercase ml-1">
+              <kbd>{navigator.userAgent.includes("Mac") ? "⌘" : "ctrl"}</kbd>+
+              <kbd>i</kbd>
+            </span>
           </Button>
         </div>
         <ApiKeysDialog />
