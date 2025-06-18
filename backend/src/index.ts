@@ -1,12 +1,11 @@
 import { Context, Hono, Next } from "hono";
 import { cors } from "hono/cors";
 import { createDbClient, schema } from "./db";
-import { and, eq, gt, gte, or } from "drizzle-orm";
+import { and, eq, gt, or } from "drizzle-orm";
 import { User } from "./schema";
 import { sign, verify } from "hono/jwt";
 import { getCookie } from "hono/cookie";
 import { genSaltSync, hashSync, compareSync } from "bcrypt-edge";
-import { mockChat } from "./lib/mockChat";
 import { sync } from "./lib/sync";
 import { SyncRequest, SyncResponse } from "./lib/sync-interface";
 import chat from "./lib/chat";
@@ -34,28 +33,24 @@ app.use(
 );
 
 const authMiddleware = async (c: Context, next: Next) => {
-  const token = (getCookie(c, "token") || c.req.header("token")) as string;
-  if (!token) {
-    console.error("No token found in request");
-    return c.json({ error: "Unauthorized - No token" }, 401);
-  }
+  // Try to grab token from multiple possible locations (cookie or headers)
+  const token = (getCookie(c, "token") ||
+    // Standard "Authorization: Bearer <token>" header
+    c.req.header("authorization")?.split(" ")[1] ||
+    // Fallback non-standard "token: <token>" header
+    c.req.header("token")) as string;
+  if (!token) return c.json({ error: "Unauthorized" }, 401);
 
   try {
-    const JWT_SECRET = c.get("JWT_SECRET");
-    if (!JWT_SECRET) {
-      console.error("JWT_SECRET not available in context");
-      return c.json({ error: "Server configuration error" }, 500);
-    }
-
-    const decoded = (await verify(token, JWT_SECRET)) as {
+    const decoded = (await verify(token, c.get("JWT_SECRET"))) as {
       email: string;
       userId: string;
       name: string;
     };
+    // Set the user in context with all the decoded data
     c.set("user", decoded);
     await next();
   } catch (err) {
-    console.error("Token verification failed:", err);
     return c.json({ error: "Invalid token" }, 401);
   }
 };
