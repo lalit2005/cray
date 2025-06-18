@@ -4,30 +4,30 @@ export interface Message {
   role: "user" | "assistant" | "system" | "data";
   content: string;
   createdAt: string;
-  provider: string;
-  model: string;
-  loading?: boolean; // Added to match the local schema
+  provider?: string;
+  model?: string;
 }
 
-export type Chat = {
+export interface Chat {
   id: string;
   title: string;
+  userId: string;
   createdAt: string;
   updatedAt: string;
-  userId: string;
-  tags?: string[];
-  notes?: string;
-  inTrash?: boolean;
-  isPinned?: boolean;
+  inTrash: boolean;
+  isPinned: boolean;
+  isPublic: boolean; // Added isPublic field
+  tags: string[];
+  notes: string;
   messages: Message[];
-};
+}
 
 export interface SyncRequest {
-  lastSyncedAt?: string | null;
-  updatedChats: Array<Chat>;
-  ids: Array<string>;
+  lastSyncedAt?: string;
+  updatedChats: Chat[];
+  ids?: string[];
 }
 
 export interface SyncResponse {
-  serverChanges: Array<Chat>;
+  serverChanges: Chat[];
 }

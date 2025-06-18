@@ -9,6 +9,7 @@ import { genSaltSync, hashSync, compareSync } from "bcrypt-edge";
 import { mockChat } from "./lib/mockChat";
 import { sync } from "./lib/sync";
 import { SyncRequest, SyncResponse } from "./lib/sync-interface";
+import chat from "./lib/chat";
 
 const app = new Hono<{
   Variables: {
@@ -183,8 +184,62 @@ app.get("/", (c) => {
 });
 
 app.post("/chat", authMiddleware, async (c) => {
-  return await mockChat(c);
-  // return await chat(c);
+  // return await mockChat(c);
+  return await chat(c);
+});
+
+// New endpoint for fetching shared chats (no auth required)
+app.get("/shared-chat/:id", async (c) => {
+  const chatId = c.req.param("id");
+  const db = c.var.db;
+
+  if (!chatId) {
+    return c.json({ error: "Chat ID is required" }, 400);
+  }
+
+  try {
+    // First, check if the chat exists and is public
+    const chats = await db
+      .select()
+      .from(schema.chats)
+      .where(
+        and(eq(schema.chats.id, chatId), eq(schema.chats.isPublic, true)) // Only return public chats (boolean true)
+      )
+      .limit(1);
+
+    if (!chats.length) {
+      return c.json({ error: "Chat not found or is not public" }, 404);
+    }
+
+    const chat = chats[0];
+
+    // Get user info (creator of the chat) for attribution but exclude sensitive data
+    const users = await db
+      .select({
+        name: schema.users.name,
+        userId: schema.users.userId,
+      })
+      .from(schema.users)
+      .where(eq(schema.users.userId, chat.userId))
+      .limit(1);
+
+    const creatorName = users.length ? users[0].name : "Anonymous";
+
+    // Get messages from the chat object
+    const messages = Array.isArray(chat.messages) ? chat.messages : [];
+
+    // Return the chat with creator's name and messages
+    return c.json({
+      chat: {
+        ...chat,
+        createdBy: creatorName, // Include the name of the user who created the chat
+      },
+      messages,
+    });
+  } catch (error) {
+    console.error("Error fetching shared chat:", error);
+    return c.json({ error: "Failed to fetch shared chat" }, 500);
+  }
 });
 
 // Sync endpoint: handle bidirectional sync of chats
@@ -227,6 +282,7 @@ app.post("/fetch-new-records", authMiddleware, async (c) => {
     updatedAt: c.updatedAt || "",
     inTrash: !!c.inTrash,
     isPinned: !!c.isPinned,
+    isPublic: !!c.isPublic,
     tags: c.tags || [],
     notes: c.notes || "",
     userId: c.userId || "",

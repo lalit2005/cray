@@ -33,8 +33,8 @@ const convertToLocalMessage = (m: Message, chatId: string): Messages => ({
     typeof m.createdAt === "string"
       ? new Date(m.createdAt)
       : (m.createdAt as unknown as Date),
-  provider: m.provider,
-  model: m.model,
+  provider: m.provider as string,
+  model: m.model as string,
   loading: false, // Messages from server are never in loading state
 });
 
@@ -54,6 +54,7 @@ const saveChatWithMessages = async (chat: Chat) => {
         updatedAt: new Date(chat.updatedAt),
         inTrash: chat.inTrash ? 1 : 0,
         isPinned: chat.isPinned ? 1 : 0,
+        isPublic: chat.isPublic ? 1 : 0, // Convert boolean to 0/1
         tags: chat.tags || [],
         notes: chat.notes || "",
         messages: [], // We don't store messages in the chat record in IndexedDB, they're in a separate table
@@ -101,176 +102,227 @@ const saveChatWithMessages = async (chat: Chat) => {
   }
 };
 
+// -----------------------------------------------------------------------------
+// Bidirectional sync implementing the same algorithm as backend `sync.ts`.
+// -----------------------------------------------------------------------------
+// 1. Collect local chat changes since `lastSyncedAt`.
+// 2. Send them together with `lastSyncedAt` + their ids to `/sync`.
+// 3. Upsert serverChanges returned.
+// 4. Persist new `lastSyncedAt` and broadcast status.
+
 export const syncAllData = async () => {
   try {
     setSyncStatus("SYNCING");
 
-    // 1. Get last sync time
+    // 1. Figure out last sync timestamp
     const kv: KeyVal | undefined = await db.keyvals.get("lastSyncedAt");
-    const lastSyncedAt = kv?.value
-      ? new Date(kv.value)
-      : new Date(new Date().getTime() - 60 * 60 * 1000);
+    const lastSyncedAt = kv?.value ?? new Date(0).toISOString();
+    const lastDate = new Date(lastSyncedAt);
 
-    console.log(
-      `Starting sync. Last sync was at: ${lastSyncedAt.toISOString()}`
-    );
-
-    // 2. Fetch new chats from server
-    console.log(`Fetching new chats since ${lastSyncedAt.toISOString()}`);
-    const { data: newChats } = await api.post<SyncResponse>(
-      "/fetch-new-records",
-      {
-        lastSyncedAt: lastSyncedAt.toISOString(),
-      }
-    );
-
-    // 3. Save new chats from server
-    console.log(
-      `Received ${newChats.serverChanges.length} new chats from server`
-    );
-    for (const chat of newChats.serverChanges) {
-      await saveChatWithMessages(chat);
-    }
-
-    // 4. Get local changes to push to server
-    const localChanges = await db.chats
-      .where("updatedAt")
-      .above(lastSyncedAt)
+    // 2a. Collect chats changed directly (updatedAt)
+    const changedChatsRaw = await db.chats
+      .filter((c) => new Date(c.updatedAt) > lastDate)
       .toArray();
 
-    console.log(`Found ${localChanges.length} locally changed chats to sync`);
+    // 2b. Detect chats that have new messages even if chat.updatedAt wasn't bumped
+    const recentMsgs = await db.messages
+      .filter((m) => new Date(m.createdAt) > lastDate && !m.loading)
+      .toArray();
+    const chatIdsFromMsgs = new Set(recentMsgs.map((m) => m.chatId));
 
-    // 5. For each chat, load all its messages
-    const fullLocalChanges: Chat[] = await Promise.all(
-      localChanges.map(async (chat): Promise<Chat> => {
-        // 1. Load all non-loading messages for this chat from IndexedDB
-        // Exclude messages in loading state as they should not be synced to server
-        const messages = await db.messages
+    // 2c. Ensure we include those chats as well
+    for (const chatId of chatIdsFromMsgs) {
+      if (!changedChatsRaw.some((c) => c.id === chatId)) {
+        const chatEntity = await db.chats.get(chatId);
+        if (chatEntity) {
+          changedChatsRaw.push(chatEntity);
+        }
+      }
+    }
+    const changedChats = changedChatsRaw;
+
+    // 3. Build payload chats
+    const updatedChats: Chat[] = await Promise.all(
+      changedChats.map(async (chat) => {
+        const msgs = await db.messages
           .where("chatId")
           .equals(chat.id)
-          .filter((msg) => !msg.loading) // Filter out loading messages
+          .filter((m) => !m.loading && m.content.trim() !== "")
           .toArray();
 
-        // 2. Convert local `Messages` (with Date fields) to network `Message` (with ISO string fields)
-        const convertedMessages: Message[] = messages
-          .filter((m) => m.content?.trim() !== "") // Don't sync empty messages
-          .map(
-            (m): Message => ({
-              id: m.id,
-              chatId: m.chatId,
-              role: m.role,
-              content: m.content || "", // Ensure content is never null/undefined
-              createdAt:
-                m.createdAt instanceof Date
-                  ? m.createdAt.toISOString()
-                  : new Date(m.createdAt).toISOString(),
-              provider: m.provider,
-              model: m.model,
-            })
-          );
+        const messages: Message[] = msgs.map((m) => ({
+          id: m.id,
+          chatId: m.chatId,
+          role: m.role,
+          content: m.content,
+          createdAt:
+            m.createdAt instanceof Date
+              ? m.createdAt.toISOString()
+              : new Date(m.createdAt).toISOString(),
+          provider: m.provider,
+          model: m.model,
+        }));
 
-        // 3. Build a proper `Chat` object for the sync request (avoid spreading typed Dexie entity)
-        const convertedChat: Chat = {
+        return {
           id: chat.id,
           title: chat.title,
-          userId: "", // server will fill this in based on the auth token
+          userId: "",
           createdAt:
             chat.createdAt instanceof Date
               ? chat.createdAt.toISOString()
               : new Date(chat.createdAt).toISOString(),
-          updatedAt:
-            chat.updatedAt instanceof Date
-              ? chat.updatedAt.toISOString()
-              : new Date(chat.updatedAt).toISOString(),
+          updatedAt: (() => {
+            const baseDate =
+              chat.updatedAt instanceof Date
+                ? chat.updatedAt
+                : new Date(chat.updatedAt);
+            const latest = messages.length
+              ? messages.reduce(
+                  (acc, cur) =>
+                    new Date(cur.createdAt).getTime() > acc.getTime()
+                      ? new Date(cur.createdAt)
+                      : acc,
+                  baseDate
+                )
+              : baseDate;
+            return latest.toISOString();
+          })(),
           inTrash: !!chat.inTrash,
           isPinned: !!chat.isPinned,
+          isPublic: !!chat.isPublic, // Convert 0/1 to boolean
           tags: chat.tags,
           notes: chat.notes,
-          messages: convertedMessages,
-        };
-
-        return convertedChat;
+          messages,
+        } as Chat;
       })
     );
 
-    // 6. Prepare payload for server
     const payload: SyncRequest = {
-      lastSyncedAt: lastSyncedAt.toISOString(),
-      updatedChats: fullLocalChanges,
-      // ids are sorted in descending order of updatedAt
-      ids: fullLocalChanges
-        .sort((a, b) => {
-          const dateA = new Date(a.updatedAt).getTime();
-          const dateB = new Date(b.updatedAt).getTime();
-          return dateB - dateA;
-        })
+      lastSyncedAt,
+      updatedChats,
+      ids: updatedChats
+        .slice()
+        .sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        )
         .map((c) => c.id),
     };
 
-    // 7. Send changes to server and get back any server changes
-    console.log(`Sending ${payload.updatedChats.length} chats to server`);
+    // 4. Send to server
+    const { data } = await api.post<SyncResponse>("/sync", payload);
 
-    // ---------------------------------------------------------------------
-    // ---------------------------------------------------------------------
-    // ---------------------------------------------------------------------
-    // ---------------------------------------------------------------------
-
-    const response = await api.post("/sync", payload);
-    const resp: SyncResponse = response.data;
-
-    // 8. Process server changes
-    console.log(
-      `Received ${resp.serverChanges.length} chat updates from server sync`
-    );
-    for (const chat of resp.serverChanges) {
+    // 5. Upsert server changes locally
+    for (const chat of data.serverChanges) {
       await saveChatWithMessages(chat);
-    } // 9. Clean up any empty or corrupted messages before finalizing sync
-    await db.transaction("rw", db.messages, async () => {
-      const emptyMessages = await db.messages
-        .filter(
-          (m) =>
-            m.content === null ||
-            m.content === undefined ||
-            m.content.trim() === ""
-        )
-        .toArray();
+    }
 
-      if (emptyMessages.length > 0) {
-        console.log(`Found ${emptyMessages.length} empty messages to clean up`);
-
-        // Filter loading messages (they're allowed to be empty)
-        const emptyNonLoadingMessages = emptyMessages.filter((m) => !m.loading);
-
-        if (emptyNonLoadingMessages.length > 0) {
-          console.log(
-            `Removing ${emptyNonLoadingMessages.length} empty non-loading messages`
-          );
-          await db.messages.bulkDelete(
-            emptyNonLoadingMessages.map((m) => m.id)
-          );
-        }
-      }
-    });
-
-    // 10. Update last sync time
+    // 6. Persist new lastSyncedAt
     await db.keyvals.put({
       id: "lastSyncedAt",
       value: new Date().toISOString(),
     });
 
     setSyncStatus("SYNCED");
-    console.log("Sync completed successfully");
-
-    // Return a summary of what was synced
     return {
-      fetchedChats: newChats.serverChanges.length,
-      sentChats: fullLocalChanges.length,
-      receivedServerChanges: resp.serverChanges.length,
+      fetchedChats: updatedChats.length,
+      receivedServerChanges: data.serverChanges.length,
     };
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    setSyncStatus("ERROR", errorMessage);
-    console.error("Sync failed:", error);
-    throw error;
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    setSyncStatus("ERROR", msg);
+    console.error("Sync failed:", msg);
+    throw err;
   }
 };
+
+// try {
+//   setSyncStatus("SYNCING");
+
+//   // --- 1. Determine last sync timestamp (defaults to epoch start)
+//   const kv = await db.keyvals.get("lastSyncedAt");
+//   const lastSyncedAt = kv?.value ?? new Date(0).toISOString();
+//   const lastDate = new Date(lastSyncedAt);
+
+//   // --- 2. Gather chats modified after last sync
+//   const changedChats = await db.chats
+//     .filter((c) => new Date(c.updatedAt) > lastDate)
+//     .toArray();
+
+//   // --- 3. Convert to network DTOs
+//   const updatedChats: Chat[] = await Promise.all(
+//     changedChats.map(async (chat) => {
+//       const msgs = await db.messages
+//         .where("chatId")
+//         .equals(chat.id)
+//         .filter((m) => !m.loading && m.content.trim() !== "")
+//         .toArray();
+
+//       const messages: Message[] = msgs.map((m) => ({
+//         id: m.id,
+//         chatId: m.chatId,
+//         role: m.role,
+//         content: m.content,
+//         createdAt:
+//           m.createdAt instanceof Date
+//             ? m.createdAt.toISOString()
+//             : new Date(m.createdAt).toISOString(),
+//         provider: m.provider,
+//         model: m.model,
+//       }));
+
+//       return {
+//         id: chat.id,
+//         title: chat.title,
+//         userId: "", // resolved by server auth
+//         createdAt:
+//           chat.createdAt instanceof Date
+//             ? chat.createdAt.toISOString()
+//             : new Date(chat.createdAt).toISOString(),
+//         updatedAt:
+//           chat.updatedAt instanceof Date
+//             ? chat.updatedAt.toISOString()
+//             : new Date(chat.updatedAt).toISOString(),
+//         inTrash: !!chat.inTrash,
+//         isPinned: !!chat.isPinned,
+//         tags: chat.tags,
+//         notes: chat.notes,
+//         messages,
+//       } as Chat;
+//     })
+//   );
+
+//   const payload: SyncRequest = {
+//     lastSyncedAt,
+//     updatedChats,
+//     ids: updatedChats
+//       .slice()
+//       .sort(
+//         (a, b) =>
+//           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+//       )
+//       .map((c) => c.id),
+//   };
+
+//   // --- 4. Send to server
+//   const { data } = await api.post<SyncResponse>("/sync", payload);
+
+//   // --- 5. Upsert server changes locally
+//   for (const chat of data.serverChanges) {
+//     await saveChatWithMessages(chat);
+//   }
+
+//   // --- 6. Save new lastSyncedAt
+//   await db.keyvals.put({ id: "lastSyncedAt", value: new Date().toISOString() });
+
+//   setSyncStatus("SYNCED");
+//   return {
+//     sentChats: updatedChats.length,
+//     receivedChats: data.serverChanges.length,
+//   };
+// } catch (err) {
+//   const msg = err instanceof Error ? err.message : String(err);
+//   setSyncStatus("ERROR", msg);
+//   console.error("Sync failed:", msg);
+//   throw err;
+// }

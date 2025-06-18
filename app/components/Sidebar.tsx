@@ -11,6 +11,7 @@ import {
   Database as DatabaseIcon,
   LogOut as LogOutIcon,
   GithubIcon,
+  PinIcon,
 } from "lucide-react";
 import { Dialog, DialogContent } from "./ui/Dialog";
 import { getApiKeys, setApiKey } from "~/lib/apiKeys";
@@ -139,7 +140,22 @@ export const Sidebar = () => {
   }, []);
 
   const chats = useLiveQuery(() =>
-    db.chats.orderBy("updatedAt").reverse().toArray()
+    db.chats
+      .where("inTrash")
+      .equals(0)
+      .reverse()
+      .toArray()
+      .then((chats) => {
+        return chats.sort((a, b) => {
+          // pinned chats first
+          // order by updated at
+          if (a.isPinned && !b.isPinned) return -1;
+          if (!a.isPinned && b.isPinned) return 1;
+          return (
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          );
+        });
+      })
   );
 
   const [results, setResults] = useState(chats || []);
@@ -189,7 +205,15 @@ export const Sidebar = () => {
                   )}
                 >
                   <p className="text-sm">
-                    {chat.title + " - " + chat.id.slice(0, 5)}
+                    {chat.title +
+                      (import.meta.env.DEV && " - " + chat.id.slice(0, 5))}
+                    <span className="ml-2 absolute right-2">
+                      {chat.isPinned ? (
+                        <PinIcon className="w-4 h-4 text-amber-500" />
+                      ) : (
+                        <></>
+                      )}
+                    </span>
                   </p>
                 </Link>
               </li>

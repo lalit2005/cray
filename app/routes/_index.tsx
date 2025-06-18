@@ -59,7 +59,16 @@ export default function Index() {
       <div className="relative">
         {searchParams.has("id") ? <StatusBar /> : <HomepageStatusBar />}
       </div>
-      <Toaster />
+      <Toaster
+        toastOptions={{
+          icon: <></>,
+          className: "!bg-zinc-950 border-2 border-zinc-800 !text-zinc-300",
+          error: {
+            className: "!bg-red-950 border-2 border-red-900/50 !text-red-500",
+          },
+        }}
+        containerClassName="mb-6"
+      />
     </div>
   );
 }

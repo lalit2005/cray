@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/ban-ts-comment */
 import { Message as AISDKMessage, useChat } from "@ai-sdk/react";
 import {
   DropdownMenu,
@@ -18,6 +19,7 @@ import { ChevronDown } from "lucide-react";
 import { getApiKey } from "~/lib/apiKeys";
 import { SUPPORTED_MODELS as models } from "~/lib/models";
 import { API_BASE_URL } from "~/lib/axios";
+import toast from "react-hot-toast";
 
 type LLMProvider =
   | "google"
@@ -75,12 +77,17 @@ export const ChatWindow = () => {
   const chatId = searchParams.get("id");
   // Keep a ref to always have the latest chatId inside callbacks
   const chatIdRef = useRef<string | null>(chatId);
+  const prevChatIdRef = useRef<string | null>(chatId);
   useEffect(() => {
     chatIdRef.current = chatId;
-    // Reset completion status when chatId changes
+    // Reset completion status and generated content when chatId changes
     completionFinishedRef.current = false;
-    currentAssistantMessageIdRef.current = null;
     currentGeneratingContentRef.current = "";
+    // Clear assistant message ID only when switching between existing chats
+    if (prevChatIdRef.current) {
+      currentAssistantMessageIdRef.current = null;
+    }
+    prevChatIdRef.current = chatId;
   }, [chatId]);
 
   const messages = useLiveQuery(
@@ -203,7 +210,7 @@ export const ChatWindow = () => {
     input,
     handleInputChange,
     handleSubmit,
-    error,
+    error: chatError,
     status,
     messages: aiMessages,
   } = useChat({
@@ -446,6 +453,11 @@ export const ChatWindow = () => {
   const handleSendMessage = async () => {
     if (input.trim() === "") return;
 
+    if (getApiKey(currentProvider) === "") {
+      toast.error("API Key is not set for " + currentProvider);
+      return;
+    }
+
     // Reset completion status flag for new message
     completionFinishedRef.current = false;
     currentGeneratingContentRef.current = "";
@@ -469,6 +481,7 @@ export const ChatWindow = () => {
         tags: [],
         inTrash: 0,
         isPinned: 0,
+        isPublic: 0, // Default to not public
         notes: "",
         messages: [],
       });
@@ -557,7 +570,7 @@ export const ChatWindow = () => {
     <div className="h-screen flex flex-col mx-auto">
       {/* Messages area */}
       <div
-        className="flex-1 p-4 space-y-4 overflow-y-auto mb-8"
+        className="flex-1 p-4 space-y-4 overflow-y-auto pb-60"
         ref={messagesContainerRef}
         id="chatWindow"
       >
@@ -693,16 +706,54 @@ export const ChatWindow = () => {
       </div>
 
       {/* Input area */}
-      <div className="bg-transparent sticky bottom-0 left-0 right-0 p-4 pb-12 sidebar-offset">
+      <div className="bg-transparent fixed bottom-0 left-[20vw] right-0 p-4 pb-12 sidebar-offset">
         <div
           className={clsx(
             "max-w-3xl mx-auto space-y-3 w-full",
             messages.length > 0 && "px-4"
           )}
         >
-          {error && (
-            <div className="text-red-500 text-sm p-2 bg-red-900 rounded">
-              {error.message}
+          {chatError && (
+            <div className="text-red-500 text-sm p-4 bg-red-900/50 border border-red-800 rounded-lg mb-4">
+              <div className="font-semibold mb-1">
+                {
+                  // @ts-ignore
+                  (chatError as unknown)?.status === 401 ||
+                  chatError.message?.includes("API key")
+                    ? "API Key Required"
+                    : "An Error Occurred"
+                }
+                <span className="capitalize ml-1">
+                  {getApiKey(currentProvider)
+                    ? ""
+                    : " - No API Key Set for " + currentProvider}
+                </span>
+              </div>
+              <div className="text-red-300">
+                {/* @ts-ignore */}
+                {(chatError as unknown)?.status === 401 ||
+                chatError.message?.toLocaleLowerCase().includes("api key")
+                  ? `Please set your ${currentProvider} API key in the settings to continue.`
+                  : chatError.message ||
+                    // @ts-ignore
+                    (chatError as unknown as Error)?.error?.message ||
+                    // @ts-ignore
+
+                    (chatError as unknown as Error)?.data?.error ||
+                    "Please try again."}
+              </div>
+              {/* @ts-ignore */}
+              {(chatError as unknown as Error)?.status === 401 && (
+                <button
+                  onClick={() => {
+                    // Assuming you have a settings route
+                    navigate("/settings");
+                  }}
+                  className="mt-2 text-white bg-red-700 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors"
+                >
+                  Go to Settings
+                </button>
+              )}
             </div>
           )}
           <div className="flex items-end shadow-xl shadow-black/20 mx-auto">

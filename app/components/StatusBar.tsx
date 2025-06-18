@@ -1,7 +1,5 @@
-// Date formatting handled with built-in Date methods
 import {
   ArchiveRestore,
-  MessageSquare,
   FileText,
   Pin,
   Trash2,
@@ -10,6 +8,7 @@ import {
   XCircle,
   RefreshCw,
   AlertCircle,
+  Share2,
 } from "lucide-react";
 import { db } from "~/localdb";
 import { Popover, PopoverContent, PopoverTrigger } from "./ui/Popover";
@@ -21,7 +20,7 @@ import debounce from "lodash/debounce";
 import { syncAllData } from "~/lib/sync";
 
 function Separator() {
-  return <span className="mx-2"> &bull; </span>;
+  return <span className=""> &bull; </span>;
 }
 
 function StatusBar() {
@@ -42,10 +41,7 @@ function StatusBar() {
   const [isSyncing, setIsSyncing] = useState(false);
 
   // Determine if we're in development mode
-  const isDevelopment =
-    process.env.NODE_ENV === "development" ||
-    window.location.hostname === "localhost" ||
-    window.location.hostname === "127.0.0.1";
+  const isDevelopment = import.meta.env.DEV;
 
   // Update notes from chat data
   useEffect(() => {
@@ -116,19 +112,15 @@ function StatusBar() {
     };
   }, []);
 
-  // Debounced function to save notes
+  // Debounced function to save notes silently
   const debouncedSaveNotes = debounce((value: string) => {
-    if (chatId && chat) {
-      db.chats
-        .update(chatId, {
-          notes: value,
-          updatedAt: new Date(),
-        })
-        .then(() => {
-          toast.success("Notes saved", { duration: 1000 });
-        });
+    if (chatId) {
+      db.chats.update(chatId, {
+        notes: value,
+        updatedAt: new Date(),
+      });
     }
-  }, 800);
+  }, 1000);
 
   // Handle notes change
   const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -179,6 +171,45 @@ function StatusBar() {
       );
     } finally {
       setIsSyncing(false);
+    }
+  };
+
+  // Function to toggle isPublic status
+  const toggleShareStatus = async () => {
+    if (!chat) return;
+
+    try {
+      const newIsPublic = chat.isPublic ? 0 : 1;
+
+      // Update local database
+      await db.chats.update(chat.id, {
+        isPublic: newIsPublic,
+        updatedAt: new Date(),
+      });
+
+      // The server will get the updated value during the next sync
+      // Force sync to update immediately on the server
+      try {
+        syncAllData();
+      } catch (syncError) {
+        console.error(
+          "Failed to sync after updating sharing status:",
+          syncError
+        );
+        // Continue even if sync fails, as we've updated locally
+      }
+
+      toast.success(newIsPublic ? "Chat is now public" : "Chat is now private");
+
+      // Copy share link if making public
+      if (newIsPublic) {
+        const shareUrl = `${window.location.origin}/share?id=${chat.id}`;
+        await navigator.clipboard.writeText(shareUrl);
+        toast.success("Share link copied to clipboard!");
+      }
+    } catch (error) {
+      toast.error("Failed to update sharing status");
+      console.error(error);
     }
   };
 
@@ -242,7 +273,7 @@ function StatusBar() {
         </div>
       )}
 
-      <div className="fixed w-screen bottom-0 left-0 font-mono text-[13px] text-zinc-500 flex px-2 py-1 items-center justify-between bg-zinc-900/50 translucent">
+      <div className="!bg-zinc-900/50 fixed w-screen bottom-0 left-0 font-mono text-[13px] text-zinc-500 flex px-2 py-1 items-center justify-between translucent">
         {/* Left side: Only title and message count */}
         <div className="flex items-center space-x-2">
           {chatId !== "" ? (
@@ -287,6 +318,20 @@ function StatusBar() {
 
               <Separator />
 
+              {/* Share Button */}
+              <button
+                title={chat.isPublic ? "Make Private" : "Share Chat"}
+                aria-label={chat.isPublic ? "Make private" : "Share chat"}
+              >
+                <Share2
+                  size={30}
+                  className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 ${
+                    chat.isPublic ? "text-green-500 hover:!text-green-500" : ""
+                  }`}
+                  onClick={toggleShareStatus}
+                />
+              </button>
+
               {/* Pin/Bookmark Button */}
               <button
                 title="Pin/Bookmark Chat"
@@ -294,7 +339,7 @@ function StatusBar() {
               >
                 <Pin
                   size={30}
-                  className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 ${
+                  className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 -mb-0.5 ${
                     chat.isPinned ? "text-amber-600 hover:!text-amber-600" : ""
                   }`}
                   onClick={() => {
@@ -314,7 +359,7 @@ function StatusBar() {
               <button title="Archive Chat" aria-label="Archive chat">
                 <ArchiveRestore
                   size={30}
-                  className={`inline-block -mb-1 hover:text-zinc-300 hover:bg-zinc-800 ${
+                  className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 ${
                     chat.inTrash ? "text-amber-600 hover:!text-amber-600" : ""
                   }`}
                   onClick={() => {
@@ -346,16 +391,14 @@ function StatusBar() {
                     />
                   </button>
                 </PopoverTrigger>
-                <PopoverContent sideOffset={10} align="end">
-                  <div className="space-y-2">
-                    <h3 className="font-medium text-zinc-300">Notes</h3>
-                    <textarea
-                      className="w-full h-32 p-2 bg-zinc-800 border border-zinc-700 rounded resize-none text-zinc-300"
-                      value={notes}
-                      onChange={handleNotesChange}
-                      placeholder="Write your notes here..."
-                    />
-                  </div>
+                <PopoverContent align="end" className="!p-0">
+                  <textarea
+                    className="w-full !bg-zinc-900 shadow-lg"
+                    // value={notes}
+                    rows={10}
+                    onChange={handleNotesChange}
+                    placeholder="Write your notes here..."
+                  />
                 </PopoverContent>
               </Popover>
 

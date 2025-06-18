@@ -3,7 +3,6 @@ import {
   Wifi,
   RefreshCw,
   AlertCircle,
-  MessageSquare,
   Pin,
   Trash2,
 } from "lucide-react";
@@ -122,21 +121,15 @@ export default function HomepageStatusBar() {
   };
 
   return (
-    <div className="fixed w-screen bottom-0 left-0 z-[9999] font-mono text-[13px] text-zinc-500 flex px-2 py-1 items-center justify-between bg-zinc-900/50 backdrop-blur-sm">
+    <div className="fixed w-screen bottom-0 left-0 z-[9999] font-mono text-[13px] text-zinc-500 flex px-2 py-1 items-center justify-between bg-zinc-900/50">
       {/* Left side: Stats about chats */}
       <div className="flex items-center space-x-2">
         <span className="uppercase">{allChatsCount} Chats</span>
 
-        <Separator />
-        <span className="uppercase" title="Total messages">
-          <MessageSquare size={16} className="inline mr-1" />
-          {messagesCount} Messages
-        </span>
-
         {pinnedChatsCount > 0 && (
           <>
             <Separator />
-            <span className="uppercase text-amber-500" title="Pinned chats">
+            <span className="uppercase text-amber-500/70" title="Pinned chats">
               <Pin size={16} className="inline mr-1" />
               {pinnedChatsCount} Pinned
             </span>
@@ -178,7 +171,7 @@ export default function HomepageStatusBar() {
                 chatsWithNotes.map((chat) => (
                   <div
                     key={chat.id}
-                    className="bg-zinc-800 p-3 rounded cursor-pointer hover:bg-zinc-700 transition-colors"
+                    className="bg-zinc-950 p-3 rounded cursor-pointer hover:bg-zinc-900 transition-colors"
                     onClick={() => {
                       navigate(`/?id=${chat.id}`);
                       // Close the dialog after navigation
@@ -193,10 +186,10 @@ export default function HomepageStatusBar() {
                       }
                     }}
                   >
-                    <h3 className="text-zinc-300 font-medium mb-1 truncate">
+                    <h3 className="text-zinc-300 font-medium mb-1 truncate text-sm">
                       {chat.title}
                     </h3>
-                    <p className="text-zinc-400 text-sm whitespace-pre-wrap line-clamp-3">
+                    <p className="text-zinc-400 whitespace-pre-wrap line-clamp-3">
                       {chat.notes}
                     </p>
                     <div className="flex justify-between mt-2 text-xs text-zinc-500">

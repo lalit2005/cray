@@ -47,6 +47,7 @@ export const chats = pgTable("chats", {
   notes: text("notes"),
   inTrash: boolean("in_trash").default(false),
   isPinned: boolean("is_pinned").default(false),
+  isPublic: boolean("is_public").default(false), // Added isPublic field
   messages: jsonb("messages").$type<Message[]>().default([]),
   // isDiscardedDueToConflict: boolean("is_discarded_due_to_conflict").default(
   //   false

@@ -1,9 +1,8 @@
 import { Context } from "hono";
-import { Message } from "./sync-interface";
+import { and, eq, gt, inArray, or } from "drizzle-orm";
 import { chats } from "../schema";
-import { eq, gte, and, inArray, desc } from "drizzle-orm";
-import { SyncRequest, SyncResponse } from "./sync-interface";
 import { createDbClient } from "../db";
+import { SyncRequest, SyncResponse, Message, Chat } from "./sync-interface";
 
 // - then client asks a new route `/fetch-new-records` and sends `lastSyncedAt`
 // - server fetches those records which were updated or created after `lastSyncedAt` and sends them to client
@@ -17,39 +16,68 @@ import { createDbClient } from "../db";
 // - for each of those fetched arrays, server sees which chat record was updated or created recently and sends them to the client
 // - the client upserts those records in the indexeddb with dexie using the `put` method and updates `lastSyncedAt`
 
+// Main bidirectional sync endpoint implementing the strategy outlined above.
+// The algorithm is simple:
+// 1.  Client sends `lastSyncedAt` + the chats changed since then.
+// 2.  Server loads (a) those chats whose ids were sent **OR** (b) chats changed since `lastSyncedAt`.
+// 3.  For overlapping ids we perform **latest-timestamp-wins** conflict resolution.
+//     •  If client version is newer -> we upsert on the server and echo back the new server copy.
+//     •  If server version is newer -> we send the server copy to the client untouched.
+// 4.  For chats only present on client -> insert & echo back.
+// 5.  For chats only present on server but newer than `lastSyncedAt` -> send to client.
+// 6.  Response is a list of authoritative `serverChanges` for the client to upsert, plus nothing else.
 export const sync = async (c: Context) => {
   const db: ReturnType<typeof createDbClient>["db"] = c.var.db;
   const user = c.get("user");
 
   const body: SyncRequest = await c.req.json();
-  const { updatedChats } = body;
+  const { lastSyncedAt, updatedChats, ids } = body;
+  console.log("Sync request:", {
+    lastSyncedAt,
+    updatedChatsCount: updatedChats.length,
+    idsCount: ids?.length,
+  });
 
-  // Key updated chats by id for quick lookup
-  const clientChatsById = new Map(updatedChats.map((chat) => [chat.id, chat]));
-  const ids = Array.from(clientChatsById.keys());
+  // --- Build quick lookup maps for the incoming (client) chats
+  const clientChatsById = new Map(updatedChats.map((c) => [c.id, c]));
+  const clientIds =
+    ids && ids.length ? ids : Array.from(clientChatsById.keys());
 
-  // Fetch corresponding chats that already exist on the server
-  const existingServerChats = ids.length
-    ? await db
-        .select()
-        .from(chats)
-        .where(and(eq(chats.userId, user.userId), inArray(chats.id, ids)))
-    : [];
+  const lastSyncDateStr = lastSyncedAt ?? undefined;
+
+  // --- Pull all server-side candidates in one go.
+  // We're interested in any chat that the client sent us, OR any chat that's
+  // been updated on the server since the client's last sync timestamp.
+  const orConditions = [];
+  if (clientIds.length > 0) {
+    orConditions.push(inArray(chats.id, clientIds));
+  }
+  if (lastSyncDateStr) {
+    orConditions.push(gt(chats.updatedAt, lastSyncDateStr));
+  }
+
+  const combinedServerChats: (typeof chats.$inferSelect)[] =
+    orConditions.length > 0
+      ? await db
+          .select()
+          .from(chats)
+          .where(and(eq(chats.userId, user.userId), or(...orConditions)))
+      : [];
 
   const normalizeDate = (d: string | Date): string =>
     typeof d === "string" ? d : (d as Date).toISOString();
 
-  const serverChanges: SyncResponse = {
-    serverChanges: [],
-  };
+  // --- Prepare response container
+  const serverChanges: SyncResponse = { serverChanges: [] };
 
-  // Helper to convert a DB row -> API response Chat shape
-  const toChatResponse = (record: (typeof existingServerChats)[number]) => ({
+  // Helper to convert a DB row -> API response Chat shape (normalises dates & booleans)
+  const toChatResponse = (record: typeof chats.$inferSelect) => ({
     ...record,
     createdAt: record.createdAt || "",
     updatedAt: record.updatedAt || "",
     inTrash: !!record.inTrash,
     isPinned: !!record.isPinned,
+    isPublic: !!record.isPublic,
     tags: record.tags || [],
     notes: record.notes || "",
     userId: record.userId || "",
@@ -60,83 +88,90 @@ export const sync = async (c: Context) => {
     })),
   });
 
-  const mutatedChatIds = new Set<string>();
+  const processedIds = new Set<string>();
 
-  // 1. Handle records that already exist on the server
-  for (const serverChat of existingServerChats) {
+  // --- Conflict resolution / upserts
+  for (const serverChat of combinedServerChats) {
     const clientChat = clientChatsById.get(serverChat.id);
-    if (!clientChat) continue; // should not happen
 
+    if (!clientChat) {
+      // This chat was not sent by client but is newer than lastSyncedAt – push to client
+      serverChanges.serverChanges.push(toChatResponse(serverChat));
+      continue;
+    }
+
+    // Use milliseconds for accurate comparison
     const clientUpdatedAt = new Date(clientChat.updatedAt).getTime();
     const serverUpdatedAt = new Date(serverChat.updatedAt || 0).getTime();
 
-    const serverMessages = serverChat.messages as Message[];
-    const clientHasMoreMsgs =
-      clientChat.messages.length > serverMessages.length;
-
-    if (clientUpdatedAt > serverUpdatedAt || clientHasMoreMsgs) {
+    if (clientUpdatedAt > serverUpdatedAt) {
       // Client is newer – update server copy
+      // --- Client version wins -> update server
       await db
         .update(chats)
         .set({
           title: clientChat.title,
-          updatedAt: clientChat.updatedAt,
+          // Store as Date object for DB timestamp column
+          updatedAt: new Date().toISOString(),
           tags: clientChat.tags,
           notes: clientChat.notes,
           inTrash: clientChat.inTrash ?? false,
           isPinned: clientChat.isPinned ?? false,
+          isPublic: clientChat.isPublic ?? false,
           messages: clientChat.messages.map((m) => ({
             ...m,
             createdAt: normalizeDate(m.createdAt),
           })) as Message[],
         })
         .where(and(eq(chats.id, serverChat.id), eq(chats.userId, user.userId)));
-      mutatedChatIds.add(serverChat.id);
+
+      // Push updated copy back to client
+      const updatedRow = await db
+        .select()
+        .from(chats)
+        .where(and(eq(chats.id, serverChat.id), eq(chats.userId, user.userId)));
+      if (updatedRow[0])
+        serverChanges.serverChanges.push(toChatResponse(updatedRow[0]));
     } else if (serverUpdatedAt > clientUpdatedAt) {
-      // Server is newer – send back to client
+      // --- Server wins -> send to client
       serverChanges.serverChanges.push(toChatResponse(serverChat));
     }
 
-    // Remove processed id from the map so that remaining are new chats
+    processedIds.add(serverChat.id);
     clientChatsById.delete(serverChat.id);
   }
 
-  // 2. Insert new chats that didn't exist on the server
+  // --- Remaining client chats are new to server
   for (const newChat of clientChatsById.values()) {
     await db.insert(chats).values({
       id: newChat.id,
       userId: user.userId,
       title: newChat.title,
       createdAt: newChat.createdAt,
-      updatedAt: newChat.updatedAt,
+      updatedAt: new Date().toISOString(),
       tags: newChat.tags,
       notes: newChat.notes,
       inTrash: newChat.inTrash ?? false,
       isPinned: newChat.isPinned ?? false,
+      isPublic: newChat.isPublic ?? false,
       messages: newChat.messages.map((m) => ({
         ...m,
         createdAt: normalizeDate(m.createdAt),
       })) as Message[],
     });
-    mutatedChatIds.add(newChat.id);
-  }
+    processedIds.add(newChat.id);
 
-  // Fetch authoritative versions for all chats that were mutated (inserted/updated) so client can store server timestamps & echoes.
-  if (mutatedChatIds.size) {
-    const updatedRows = await db
+    // Echo back the newly created chat
+    const newServerChat = await db
       .select()
       .from(chats)
-      .where(
-        and(
-          eq(chats.userId, user.userId),
-          inArray(chats.id, Array.from(mutatedChatIds))
-        )
-      );
-
-    updatedRows.forEach((r) =>
-      serverChanges.serverChanges.push(toChatResponse(r))
-    );
+      .where(and(eq(chats.id, newChat.id), eq(chats.userId, user.userId)));
+    if (newServerChat[0]) {
+      serverChanges.serverChanges.push(toChatResponse(newServerChat[0]));
+    }
   }
+
+  // --- For any client inserts we already echoed back when inserting. For new server-only chats we already pushed above.
 
   return c.json(serverChanges);
 };
