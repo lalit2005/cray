@@ -12,6 +12,7 @@ import {
   LogOut as LogOutIcon,
   GithubIcon,
   PinIcon,
+  MessageSquare,
 } from "lucide-react";
 import { Dialog, DialogContent } from "./ui/Dialog";
 import { getApiKeys, setApiKey } from "~/lib/apiKeys";
@@ -194,31 +195,45 @@ export const Sidebar = () => {
           </div>
         </div>
         <div className="mt-4 max-h-[65vh] overflow-y-auto">
-          <ul>
-            {results?.map((chat) => (
-              <li key={chat.id} tabIndex={-1}>
-                <Link
-                  to={`/?id=${chat.id}`}
-                  tabIndex={0}
-                  className={clsx(
-                    "overflow-hidden px-2 py-1 my-3 ring ring-zinc-900 sm:border border-zinc-900 focus:outline-none block sm:bg-gradient-to-br from-zinc-900/20 to-zinc-900/70 hover:from-zinc-900/40 hover:to-zinc-900/80 focus:from-zinc-900/40 focus:to-zinc-900/80 focus:ring focus:ring-zinc-800 relative"
-                  )}
-                >
-                  <p className="text-sm">
-                    {chat.title +
-                      (import.meta.env.DEV && " - " + chat.id.slice(0, 5))}
-                    <span className="ml-2 absolute right-2">
-                      {chat.isPinned ? (
-                        <PinIcon className="w-4 h-4 text-amber-500" />
-                      ) : (
-                        <></>
-                      )}
-                    </span>
-                  </p>
-                </Link>
-              </li>
-            ))}
-          </ul>
+          {results?.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+              <div className="bg-zinc-800/50 p-6 rounded-full mb-4">
+                <MessageSquare className="w-10 h-10 text-zinc-500" />
+              </div>
+              <h3 className="text-lg font-medium text-zinc-200 mb-1">
+                No chats yet
+              </h3>
+              <p className="text-sm text-zinc-400 max-w-md">
+                Start a new conversation to see it appear here
+              </p>
+            </div>
+          ) : (
+            <ul>
+              {results?.map((chat) => (
+                <li key={chat.id} tabIndex={-1}>
+                  <Link
+                    to={`/?id=${chat.id}`}
+                    tabIndex={0}
+                    className={clsx(
+                      "overflow-hidden px-2 py-1 my-3 ring ring-zinc-900 sm:border border-zinc-900 focus:outline-none block sm:bg-gradient-to-br from-zinc-900/20 to-zinc-900/70 hover:from-zinc-900/40 hover:to-zinc-900/80 focus:from-zinc-900/40 focus:to-zinc-900/80 focus:ring focus:ring-zinc-800 relative"
+                    )}
+                  >
+                    <p className="text-sm">
+                      {chat.title +
+                        (import.meta.env.DEV && " - " + chat.id.slice(0, 5))}
+                      <span className="ml-2 absolute right-2">
+                        {chat.isPinned ? (
+                          <PinIcon className="w-4 h-4 text-amber-500" />
+                        ) : (
+                          <></>
+                        )}
+                      </span>
+                    </p>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          )}
         </div>
       </div>
 
