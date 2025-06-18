@@ -55,14 +55,7 @@ app.use("*", async (c, next) => {
   const { db } = createDbClient(c.env);
   c.set("db", db);
   const JWT_SECRET = (c.env as { JWT_SECRET: string }).JWT_SECRET;
-  if (!JWT_SECRET) {
-    throw new Error("JWT_SECRET not found in env");
-  }
   c.set("JWT_SECRET", JWT_SECRET);
-
-  if (c.req.method === "OPTIONS") {
-    return c.json({ message: "OK" }, 200);
-  }
 
   // Only try to get user if there's a token
   const token =
