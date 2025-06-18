@@ -188,9 +188,7 @@ app.post("/login", async (c) => {
 app.post("/logout", async (c) => {
   c.header(
     "Set-Cookie",
-    `token=${token}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${
-      60 * 60 * 24 * 7
-    }`
+    'token=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0'
   );
   return c.json({ message: "Logged out" });
 });
