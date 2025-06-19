@@ -1,20 +1,27 @@
 import { Context, Hono, Next } from "hono";
 import { cors } from "hono/cors";
 import { createDbClient, schema } from "./db";
-import { and, eq, gt, or } from "drizzle-orm";
+import { and, eq, gt, gte, or } from "drizzle-orm";
 import { User } from "./schema";
 import { sign, verify } from "hono/jwt";
-import { getCookie } from "hono/cookie";
+import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { genSaltSync, hashSync, compareSync } from "bcrypt-edge";
+import { mockChat } from "./lib/mockChat";
 import { sync } from "./lib/sync";
 import { SyncRequest, SyncResponse } from "./lib/sync-interface";
 import chat from "./lib/chat";
+
+interface UserDataInToken {
+  email: string;
+  userId: string;
+  name: string;
+}
 
 const app = new Hono<{
   Variables: {
     db: ReturnType<typeof createDbClient>["db"];
     JWT_SECRET: string;
-    user: User;
+    user: UserDataInToken;
   };
 }>().basePath("/api");
 
@@ -29,40 +36,30 @@ app.use(
     ],
     // allow credentials (cookies) to be sent
     credentials: true,
+    exposeHeaders: ["set-cookie", "Set-Cookie"],
   })
 );
 
 const authMiddleware = async (c: Context, next: Next) => {
+  const token = (getCookie(c, "token") || c.req.header("token")) as string;
+  if (!token) return c.json({ error: "Unauthorized!!" }, 401);
+
   try {
-    // Improved token extraction with better logging
-    const token =
-      getCookie(c, "token") ||
-      c.req.header("authorization")?.split(" ")[1] ||
-      c.req.header("token");
-
-    if (!token) {
-      console.log("[Auth] No token found");
-      return c.json({ error: "Unauthorized - No token provided" }, 401);
-    }
-
-    const JWT_SECRET = c.get("JWT_SECRET");
-    if (!JWT_SECRET) {
-      console.error("[Auth] JWT_SECRET not available in context");
-      return c.json({ error: "Server configuration error" }, 500);
-    }
-
-    const decoded = (await verify(token, JWT_SECRET)) as {
-      email: string;
-      userId: string;
-      name: string;
-    };
-
-    console.log(`[Auth] Successful verification for user: ${decoded.email}`);
+    const decoded = (await verify(
+      token,
+      c.get("JWT_SECRET")
+    )) as unknown as UserDataInToken;
+    // Set the user in context with all the decoded data
     c.set("user", decoded);
     await next();
   } catch (err) {
-    console.error("[Auth] Token verification failed:", err);
-    return c.json({ error: "Invalid or expired token" }, 401);
+    console.log({
+      err,
+      token,
+      cookie: getCookie(c, "token"),
+      tokenHeader: c.req.header("token"),
+    });
+    return c.json({ error: "Invalid jwt token!!" }, 401);
   }
 };
 
@@ -71,29 +68,6 @@ app.use("*", async (c, next) => {
   c.set("db", db);
   const JWT_SECRET = (c.env as { JWT_SECRET: string }).JWT_SECRET;
   c.set("JWT_SECRET", JWT_SECRET);
-
-  // Only try to get user if there's a token
-  const token =
-    getCookie(c, "token") || c.req.header("authorization")?.split(" ")[1];
-  if (token) {
-    try {
-      const decoded = (await verify(token, JWT_SECRET)) as { userId: string };
-      if (decoded?.userId) {
-        const users = await db
-          .select()
-          .from(schema.users)
-          .where(eq(schema.users.userId, decoded.userId))
-          .limit(1);
-        if (users[0]) {
-          c.set("user", users[0] as User);
-        }
-      }
-    } catch (err) {
-      // Token verification failed, proceed without user
-      console.error("Token verification failed:", err);
-    }
-  }
-
   await next();
 });
 
@@ -126,12 +100,16 @@ app.post("/signup", async (c) => {
   );
 
   // Set HttpOnly Secure Cookie
-  c.header(
-    "Set-Cookie",
-    `token=${token}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${
-      60 * 60 * 24 * 7
-    }`
-  );
+  // c.header(
+  //   "Set-Cookie",
+  //   `token=${token}; HttpOnly; Secure; SameSite=None;`
+  // );
+  setCookie(c, "token", token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 31536000,
+  });
 
   // Return user data without sensitive information
   const { passwordHash: _, ...userData } = user;
@@ -152,7 +130,7 @@ app.post("/login", async (c) => {
   if (!users[0]) {
     return c.json({ error: "User not found" }, 404);
   }
-  console.log({ users });
+  // console.log({ users });
   const user = users[0];
   if (!user || !compareSync(password, user.passwordHash)) {
     return c.json({ error: "Invalid credentials" }, 401);
@@ -169,12 +147,13 @@ app.post("/login", async (c) => {
   );
 
   // Set HttpOnly Secure Cookie
-  c.header(
-    "Set-Cookie",
-    `token=${token}; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=${
-      60 * 60 * 24 * 7
-    }`
-  );
+  // c.header("Set-Cookie", `token=${token}; HttpOnly; Secure; SameSite=None;`);
+  setCookie(c, "token", token, {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 31536000,
+  });
 
   // Return user data without sensitive information
   const { passwordHash, ...userData } = user;
@@ -186,10 +165,13 @@ app.post("/login", async (c) => {
 });
 
 app.post("/logout", async (c) => {
-  c.header(
-    "Set-Cookie",
-    'token=; Path=/; HttpOnly; SameSite=None; Secure; Max-Age=0'
-  );
+  // c.header("Set-Cookie", `token=; HttpOnly; Secure; SameSite=None;; Max-Age=0`);
+  deleteCookie(c, "token", {
+    httpOnly: true,
+    secure: true,
+    sameSite: "none",
+    maxAge: 0,
+  });
   return c.json({ message: "Logged out" });
 });
 

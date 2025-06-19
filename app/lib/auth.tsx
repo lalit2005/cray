@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from "react";
 import { useNavigate } from "@remix-run/react";
 import toast from "react-hot-toast";
 import api from "~/lib/axios";
+import { db } from "~/localdb";
 
 interface User {
   email: string;
@@ -35,20 +36,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const refresh = async () => {
     try {
-      // Check for existing token in localStorage
-      const token = localStorage.getItem('jwt');
-      if (token) {
-        // Set auth header if token exists
-        api.defaults.headers.Authorization = `Bearer ${token}`;
-        const res = await api.get("/me");
-        setUser(res.data.user as User);
-      } else {
-        setUser(null);
-      }
+      const res = await api.get("/me");
+      setUser(res.data.user as User);
     } catch (err) {
-      // Clear invalid token on error
-      localStorage.removeItem('jwt');
-      delete api.defaults.headers.Authorization;
       setUser(null);
     } finally {
       setLoading(false);
@@ -64,11 +54,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const res = await api.post("/login", { email, password });
       toast.success(res.data.message || "Logged in");
-      // Store token and set auth header
-      if (res.data.token) {
-        localStorage.setItem('jwt', res.data.token);
-        api.defaults.headers.Authorization = `Bearer ${res.data.token}`;
-      }
       // Update user state with the user data from the response
       setUser(res.data.user);
       navigate("/");
@@ -82,11 +67,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       const res = await api.post("/signup", { email, password, name });
       toast.success(res.data.message || "Account created");
-      // Store token and set auth header
-      if (res.data.token) {
-        localStorage.setItem('jwt', res.data.token);
-        api.defaults.headers.Authorization = `Bearer ${res.data.token}`;
-      }
       // Update user state with the user data from the response
       setUser(res.data.user);
       navigate("/");
@@ -99,15 +79,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = async () => {
     try {
       await api.post("/logout");
-    } catch (err) {
-      console.error("Logout error:", err);
-    } finally {
-      // Clear token and auth header
-      localStorage.removeItem('jwt');
-      delete api.defaults.headers.Authorization;
-      setUser(null);
-      navigate("/login");
-    }
+    } catch {}
+    db.chats.clear();
+    db.messages.clear();
+    setUser(null);
+    navigate("/login");
   };
 
   const value: AuthContextValue = {
