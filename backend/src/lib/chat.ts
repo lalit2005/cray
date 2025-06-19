@@ -1,8 +1,7 @@
 import { Context } from "hono";
-import { getModel } from "../models";
 import { streamText } from "ai";
-import { Providers, ChatRequest } from "../models";
 import { stream } from "hono/streaming";
+import { getModel, Providers, ChatRequest } from "../models";
 
 export default async function (c: Context) {
   try {
@@ -40,9 +39,95 @@ export default async function (c: Context) {
 
       console.log("Model initialized, streaming text...");
 
+      // Sanitize messages to ensure they alternate correctly (user->assistant->user)
+      const sanitizedMessages = [];
+      let lastRole = null;
+
+      for (const message of messages) {
+        // If this is a consecutive message with the same role, skip it
+        if (lastRole === message.role) {
+          console.log(
+            `Skipping consecutive ${message.role} message:`,
+            message.content.substring(0, 50)
+          );
+          continue;
+        }
+
+        // Otherwise, add the message and update lastRole
+        sanitizedMessages.push(message);
+        lastRole = message.role;
+      }
+
+      // Ensure last message is from user for better response
+      if (
+        sanitizedMessages.length > 0 &&
+        sanitizedMessages[sanitizedMessages.length - 1].role === "assistant"
+      ) {
+        console.log(
+          "Removing assistant message at the end of the conversation"
+        );
+        sanitizedMessages.pop();
+      }
+
+      // Additional validation specifically for Perplexity API - they're stricter about message format
+      if (provider === "perplexity") {
+        // Ensure we start with a user message
+        if (
+          sanitizedMessages.length > 0 &&
+          sanitizedMessages[0].role !== "user"
+        ) {
+          sanitizedMessages.shift();
+        }
+
+        // Ensure we have proper alternating messages
+        const validatedMessages = [];
+        let expectedRole = "user";
+
+        for (const message of sanitizedMessages) {
+          if (message.role === expectedRole) {
+            validatedMessages.push(message);
+            expectedRole = expectedRole === "user" ? "assistant" : "user";
+          }
+        }
+
+        // If we have at least one message and it's a user message, we're good to go
+        if (
+          validatedMessages.length > 0 &&
+          validatedMessages[validatedMessages.length - 1].role === "user"
+        ) {
+          sanitizedMessages.length = 0;
+          sanitizedMessages.push(...validatedMessages);
+        }
+
+        // If we have too many messages for Perplexity (they sometimes have limits),
+        // keep only the most recent conversation thread up to 10 messages
+        if (sanitizedMessages.length > 10) {
+          console.log(
+            `Trimming long Perplexity conversation from ${sanitizedMessages.length} messages to last 10`
+          );
+          const trimmedMessages = sanitizedMessages.slice(-10);
+
+          // Ensure we still have a proper conversation flow
+          if (trimmedMessages[0].role === "assistant") {
+            // If first message is assistant, add a dummy user message before it
+            trimmedMessages.unshift({
+              role: "user",
+              content: "Continue our conversation please.",
+            });
+          }
+
+          sanitizedMessages.length = 0;
+          sanitizedMessages.push(...trimmedMessages);
+        }
+      }
+
+      console.log(
+        `Sanitized from ${messages.length} to ${sanitizedMessages.length} messages`
+      );
+
       const result = await streamText({
         model: modelInstance,
-        messages,
+        messages: sanitizedMessages,
         onFinish: (msg) => {
           console.log("Message received:", msg);
         },
@@ -63,6 +148,57 @@ export default async function (c: Context) {
         model,
         stack: (modelError as Error)?.stack,
       });
+
+      // Check for specific Perplexity error about message ordering
+      const errorMessage = (modelError as Error)?.message || "";
+      const responseBody =
+        (modelError as { responseBody?: string })?.responseBody || "";
+
+      if (
+        provider === "perplexity" &&
+        (errorMessage.includes("alternate with assistant") ||
+          responseBody.includes("alternate with assistant") ||
+          errorMessage.includes("invalid_message") ||
+          responseBody.includes("invalid_message"))
+      ) {
+        console.log(
+          "Detected Perplexity message ordering error, trying fallback approach"
+        );
+
+        try {
+          // Try with just the most recent user message as a fallback
+          const lastUserMessage = messages.findLast((m) => m.role === "user");
+
+          if (lastUserMessage) {
+            console.log("Using fallback with only the last user message");
+
+            // Create a fresh model instance for the fallback attempt
+            const fallbackModel = getModel({
+              provider,
+              modelId: model,
+              apiKey,
+            });
+
+            const fallbackResult = await streamText({
+              model: fallbackModel,
+              messages: [lastUserMessage],
+              onFinish: (msg) => {
+                console.log("Fallback message received:", msg);
+              },
+              onError: (fallbackError) => {
+                console.error("Fallback also failed:", fallbackError);
+              },
+            });
+
+            return stream(c, (stream) =>
+              stream.pipe(fallbackResult.toDataStream())
+            );
+          }
+        } catch (fallbackError) {
+          console.error("Fallback attempt failed:", fallbackError);
+          // Continue to the standard error response
+        }
+      }
 
       return c.json(
         {
