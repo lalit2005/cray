@@ -11,11 +11,10 @@ import {
   Share2,
 } from "lucide-react";
 import { db } from "~/localdb";
-import { Popover, PopoverContent, PopoverTrigger } from "./ui/Popover";
 import toast from "react-hot-toast";
 import { useSearchParams } from "@remix-run/react";
 import { useLiveQuery } from "dexie-react-hooks";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import debounce from "lodash/debounce";
 import { syncAllData } from "~/lib/sync";
 
@@ -32,25 +31,79 @@ function StatusBar() {
     () => db.chats.where("id").equals(chatId).first(),
     [chatId]
   );
-  const [notes, setNotes] = useState("");
   const [syncStatus, setSyncStatus] = useState<"SYNCING" | "SYNCED" | "ERROR">(
     "SYNCED"
   );
   const [syncError, setSyncError] = useState<string | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
+  const [showNotesSidebar, setShowNotesSidebar] = useState(false);
+  const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
 
   // Determine if we're in development mode
   const isDevelopment = import.meta.env.DEV;
 
-  // Update notes from chat data
+  // Update notes from chat data and set focus when sidebar opens
   useEffect(() => {
-    if (chat?.notes) {
-      setNotes(chat.notes);
-    } else {
-      setNotes("");
+    if (showNotesSidebar && notesTextareaRef.current) {
+      // We should only update the textarea when the chat changes or sidebar opens,
+      // not on every render to avoid overwriting user input
+      const notesContent = chat?.notes || "";
+
+      // Only update if the value has actually changed from what's in the database
+      if (notesTextareaRef.current.value !== notesContent) {
+        notesTextareaRef.current.value = notesContent;
+      }
+
+      // Focus the textarea after a small delay
+      setTimeout(() => {
+        notesTextareaRef.current?.focus();
+      }, 100);
     }
-  }, [chat?.notes]);
+  }, [showNotesSidebar, chat?.id, chat?.notes]);
+
+  // Add keyboard shortcut (Alt+N) to toggle notes sidebar
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.altKey && e.key === "n") {
+        e.preventDefault();
+
+        // If we're about to close the sidebar, ensure notes are saved first
+        if (showNotesSidebar && notesTextareaRef.current) {
+          const value = notesTextareaRef.current.value;
+          // Force an immediate save instead of debounced
+          if (chatId && value !== chat?.notes) {
+            db.chats.update(chatId, {
+              notes: value,
+              updatedAt: new Date(),
+            });
+          }
+        }
+
+        setShowNotesSidebar((prev) => !prev);
+      }
+
+      // Close notes with Escape key
+      if (e.key === "Escape" && showNotesSidebar) {
+        // Ensure notes are saved before closing
+        if (notesTextareaRef.current) {
+          const value = notesTextareaRef.current.value;
+          // Force an immediate save instead of debounced
+          if (chatId && value !== chat?.notes) {
+            db.chats.update(chatId, {
+              notes: value,
+              updatedAt: new Date(),
+            });
+          }
+        }
+
+        setShowNotesSidebar(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [showNotesSidebar, chatId, chat?.notes]);
 
   // Get sync status from localStorage
   useEffect(() => {
@@ -113,21 +166,41 @@ function StatusBar() {
   }, []);
 
   // Debounced function to save notes silently
-  const debouncedSaveNotes = debounce((value: string) => {
-    if (chatId) {
-      db.chats.update(chatId, {
-        notes: value,
-        updatedAt: new Date(),
-      });
-    }
-  }, 1000);
+  const debouncedSaveNotes = useRef(
+    debounce(async (value: string) => {
+      if (chatId) {
+        try {
+          await db.chats.update(chatId, {
+            notes: value,
+            updatedAt: new Date(),
+          });
+          console.log(`Notes saved for chat ${chatId}`);
+        } catch (error) {
+          console.error("Error saving notes:", error);
+        }
+      }
+    }, 1000)
+  ).current;
 
-  // Handle notes change
-  const handleNotesChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const value = e.target.value;
-    setNotes(value);
-    debouncedSaveNotes(value);
-  };
+  // Set up notes textarea event listener
+  useEffect(() => {
+    const textarea = notesTextareaRef.current;
+    if (!textarea) return;
+
+    const handleNotesChange = () => {
+      const value = textarea.value;
+      debouncedSaveNotes(value);
+    };
+
+    // Add event listener for both input and blur events
+    textarea.addEventListener("input", handleNotesChange);
+    textarea.addEventListener("blur", handleNotesChange); // Also save on blur
+
+    return () => {
+      textarea.removeEventListener("input", handleNotesChange);
+      textarea.removeEventListener("blur", handleNotesChange);
+    };
+  }, [chatId, debouncedSaveNotes]);
 
   // Function to delete all IndexedDB data
   const deleteAllData = async () => {
@@ -219,6 +292,52 @@ function StatusBar() {
 
   return chat ? (
     <>
+      {/* Notes Sidebar */}
+      {showNotesSidebar && (
+        <div className="fixed top-0 right-0 bottom-0 h-auto w-80 bg-zinc-900/95 border-l border-zinc-800 z-[9999] sidebar flex flex-col shadow-xl transition-all duration-300 ease-in-out">
+          <div className="flex justify-between items-center p-3 border-b border-zinc-800">
+            <div>
+              <h3 className="text-zinc-300">Notes</h3>
+              <div className="text-xs text-zinc-500 mt-1">
+                Press <kbd className="px-1 py-0.5 text-xs lowercase">Esc</kbd>{" "}
+                or <kbd className="px-1 py-0.5 text-xs lowercase">Alt+N</kbd> to
+                close
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                // Ensure notes are saved before closing
+                if (notesTextareaRef.current) {
+                  const value = notesTextareaRef.current.value;
+                  // Force an immediate save instead of debounced
+                  if (chatId && value !== chat?.notes) {
+                    db.chats.update(chatId, {
+                      notes: value,
+                      updatedAt: new Date(),
+                    });
+                  }
+                }
+                setShowNotesSidebar(false);
+              }}
+              className="text-zinc-500 hover:text-zinc-300"
+              title="Close Notes"
+              aria-label="Close notes"
+            >
+              <XCircle size={20} />
+            </button>
+          </div>
+          <div className="flex-grow flex flex-col h-full pb-8">
+            <textarea
+              ref={notesTextareaRef}
+              className="w-full h-full flex-grow !bg-zinc-900 border-0 resize-none p-4 shadow-inner"
+              defaultValue={chat?.notes || ""}
+              key={`notes-${chat.id}`} // Force re-render when chat changes
+              placeholder="Write your notes here as you chat..."
+            />
+          </div>
+        </div>
+      )}
+
       {/* Debug Panel in Development Mode */}
       {isDevelopment && showDebugInfo && (
         <div className="fixed top-0 right-0 bg-zinc-900 border border-zinc-700 p-3 m-3 rounded shadow-lg z-50 text-zinc-300 font-mono text-sm">
@@ -375,32 +494,37 @@ function StatusBar() {
                 />
               </button>
 
-              {/* Notes Button with fixed Popover */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <button
-                    type="button"
-                    title="Chat Notes"
-                    aria-label="Edit chat notes"
-                  >
-                    <FileText
-                      size={30}
-                      className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 ${
-                        notes ? "text-amber-600 hover:!text-amber-600" : ""
-                      }`}
-                    />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent align="end" className="!p-0">
-                  <textarea
-                    className="w-full !bg-zinc-900 shadow-lg"
-                    // value={notes}
-                    rows={10}
-                    onChange={handleNotesChange}
-                    placeholder="Write your notes here..."
-                  />
-                </PopoverContent>
-              </Popover>
+              {/* Notes Button for sidebar toggle */}
+              <button
+                type="button"
+                title={`${showNotesSidebar ? "Close" : "Show"} Notes (Alt+N)`}
+                aria-label={`${showNotesSidebar ? "Close" : "Show"} notes`}
+                onClick={() => {
+                  // If closing the sidebar, ensure notes are saved first
+                  if (showNotesSidebar && notesTextareaRef.current) {
+                    const value = notesTextareaRef.current.value;
+                    // Force an immediate save instead of debounced
+                    if (chatId && value !== chat?.notes) {
+                      db.chats.update(chatId, {
+                        notes: value,
+                        updatedAt: new Date(),
+                      });
+                    }
+                  }
+                  setShowNotesSidebar(!showNotesSidebar);
+                }}
+              >
+                <FileText
+                  size={30}
+                  className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 ${
+                    chat?.notes ? "text-amber-600 hover:!text-amber-600" : ""
+                  } ${
+                    showNotesSidebar
+                      ? "text-amber-600 hover:!text-amber-600"
+                      : ""
+                  }`}
+                />
+              </button>
 
               {/* Delete Button */}
               <button title="Delete Chat" aria-label="Delete chat">

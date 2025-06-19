@@ -80,8 +80,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       await api.post("/logout");
     } catch {}
-    db.chats.clear();
-    db.messages.clear();
+    db.tables.forEach((a) => {
+      a.clear();
+    });
     setUser(null);
     navigate("/login");
   };

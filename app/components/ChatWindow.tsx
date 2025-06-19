@@ -1,4 +1,12 @@
-/* eslint-disable @typescript-eslint/ban-ts-comment */
+/* eslint-disimport { useEffect, useRef, useState } from "react";
+import { db } from "~/localdb";
+import { useSearchParams, useNavigate, useLocation } from "@remix-run/react";
+import { useLiveQuery } from "dexie-react-hooks";
+import { ChevronDown } from "lucide-react";
+import { getApiKey } from "~/lib/apiKeys";
+import { SUPPORTED_MODELS as models } from "~/lib/models";
+import { API_BASE_URL } from "~/lib/axios";
+import toast from "react-hot-toast";escript-eslint/ban-ts-comment */
 import { Message as AISDKMessage, useChat } from "@ai-sdk/react";
 import {
   DropdownMenu,
@@ -13,7 +21,12 @@ import rehypeRaw from "rehype-raw";
 import { Button } from "./ui/Button";
 import { useEffect, useRef, useState } from "react";
 import { db } from "~/localdb";
-import { useSearchParams, useNavigate, useLocation } from "@remix-run/react";
+import {
+  useSearchParams,
+  useNavigate,
+  useLocation,
+  Link,
+} from "@remix-run/react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { ChevronDown } from "lucide-react";
 import { getApiKey } from "~/lib/apiKeys";
@@ -634,12 +647,41 @@ export const ChatWindow = () => {
                 >
                   <div
                     className={clsx(
-                      "p-4 max-w-[85%] lg:max-w-2xl rounded msg",
+                      "p-4 max-w-[85%] lg:max-w-2xl rounded msg relative group transition-all duration-200",
                       message.role === "user"
-                        ? "bg-gradient-to-b from-zinc-900 via-zinc-800 to-zinc-900 shadow-inset"
+                        ? "bg-gradient-to-b from-zinc-900 via-zinc-800 to-zinc-900 shadow-inset hover:from-zinc-800 hover:via-zinc-700 hover:to-zinc-800"
                         : "bg-zinc-950 border-2 border-zinc-900 bg-gradient-to-br from-zinc-900 via-zinc-800/30 to-zinc-900"
                     )}
                   >
+                    {/* Message actions toolbar - visible on hover */}
+                    <div
+                      className={clsx(
+                        "absolute bottom-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 bg-zinc-900 flex gap-1 rounded-full",
+                        message.role === "assistant" ? "-right-10" : "-left-10"
+                      )}
+                    >
+                      {/* Copy message button */}
+                      <button
+                        title="Copy message"
+                        aria-label="Copy message"
+                        onClick={() => {
+                          navigator.clipboard.writeText(message.content);
+                          toast.success("Message copied to clipboard");
+                        }}
+                        className="p-1 rounded text-zinc-400 hover:text-amber-500"
+                      >
+                        <svg
+                          xmlns="http://www.w3.org/2000/svg"
+                          width="16"
+                          height="16"
+                          fill="currentColor"
+                          viewBox="0 0 16 16"
+                        >
+                          <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1Z" />
+                          <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Z" />
+                        </svg>
+                      </button>
+                    </div>
                     {message.role === "assistant" &&
                     message.loading === true ? (
                       <div>
@@ -734,7 +776,7 @@ export const ChatWindow = () => {
             <div className="text-red-500 text-sm p-4 bg-red-900/50 border border-red-800 rounded-lg mb-4">
               <div className="font-semibold mb-1">
                 {
-                  // @ts-ignore
+                  // @ts-expect-error Status might be on the error object
                   (chatError as unknown)?.status === 401 ||
                   chatError.message?.includes("API key")
                     ? "API Key Required"
@@ -747,30 +789,33 @@ export const ChatWindow = () => {
                 </span>
               </div>
               <div className="text-red-300">
-                {/* @ts-ignore */}
-                {(chatError as unknown)?.status === 401 ||
-                chatError.message?.toLocaleLowerCase().includes("api key")
-                  ? `Please set your ${currentProvider} API key in the settings to continue.`
-                  : chatError.message ||
-                    // @ts-ignore
-                    (chatError as unknown as Error)?.error?.message ||
-                    // @ts-ignore
-
-                    (chatError as unknown as Error)?.data?.error ||
-                    "Please try again."}
+                {
+                  // @ts-expect-error Status might be on the error object
+                  (chatError as unknown)?.status === 401 ||
+                  chatError.message?.toLocaleLowerCase().includes("api key")
+                    ? `Please set your ${currentProvider} API key in the settings to continue.`
+                    : chatError.message ||
+                      // @ts-expect-error Error might have non-standard properties
+                      (chatError as unknown as Error)?.error?.message ||
+                      // @ts-expect-error Error might have non-standard properties
+                      (chatError as unknown as Error)?.data?.error ||
+                      "Please try again."
+                }
               </div>
-              {/* @ts-ignore */}
-              {(chatError as unknown as Error)?.status === 401 && (
-                <button
-                  onClick={() => {
-                    // Assuming you have a settings route
-                    navigate("/settings");
-                  }}
-                  className="mt-2 text-white bg-red-700 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors"
-                >
-                  Go to Settings
-                </button>
-              )}
+              {
+                // @ts-expect-error Status might be on the error object
+                (chatError as unknown as Error)?.status === 401 && (
+                  <button
+                    onClick={() => {
+                      // Assuming you have a settings route
+                      navigate("/settings");
+                    }}
+                    className="mt-2 text-white bg-red-700 hover:bg-red-600 px-3 py-1 rounded text-sm transition-colors"
+                  >
+                    Go to Settings
+                  </button>
+                )
+              }
             </div>
           )}
           <div className="flex items-end shadow-xl shadow-black/20 mx-auto">

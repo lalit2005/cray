@@ -143,22 +143,29 @@ export const sync = async (c: Context) => {
 
   // --- Remaining client chats are new to server
   for (const newChat of clientChatsById.values()) {
-    await db.insert(chats).values({
-      id: newChat.id,
-      userId: user.userId,
-      title: newChat.title,
-      createdAt: newChat.createdAt,
-      updatedAt: new Date().toISOString(),
-      tags: newChat.tags,
-      notes: newChat.notes,
-      inTrash: newChat.inTrash ?? false,
-      isPinned: newChat.isPinned ?? false,
-      isPublic: newChat.isPublic ?? false,
-      messages: newChat.messages.map((m) => ({
-        ...m,
-        createdAt: normalizeDate(m.createdAt),
-      })) as Message[],
-    });
+    // Use Postgres UPSERT semantics to avoid duplicate-key errors if the chat
+    // (accidentally) already exists on the server. If it does, we simply keep
+    // the existing row and continue – it will be picked up below when we read
+    // it back and echoed to the client.
+    await db
+      .insert(chats)
+      .values({
+        id: newChat.id,
+        userId: user.userId,
+        title: newChat.title,
+        createdAt: newChat.createdAt,
+        updatedAt: new Date().toISOString(),
+        tags: newChat.tags,
+        notes: newChat.notes,
+        inTrash: newChat.inTrash ?? false,
+        isPinned: newChat.isPinned ?? false,
+        isPublic: newChat.isPublic ?? false,
+        messages: newChat.messages.map((m) => ({
+          ...m,
+          createdAt: normalizeDate(m.createdAt),
+        })) as Message[],
+      })
+      .onConflictDoNothing();
     processedIds.add(newChat.id);
 
     // Echo back the newly created chat

@@ -29,6 +29,7 @@ export const SUPPORTED_MODELS = {
   deepseek: ["deepseek-chat"],
   perplexity: ["sonar", "sonar-pro"],
   openrouter: [
+    "openai/gpt-4.1",
     "openai/gpt-4.1-nano",
     "openai/gpt-4o-mini",
     "openai/gpt-3.5-turbo",
@@ -38,7 +39,8 @@ export const SUPPORTED_MODELS = {
     "google/gemini-2.0-flash-exp:free",
     "x-ai/grok-3-beta",
     "x-ai/grok-3-mini-beta",
-    "mistralai/devstral-small:free",
+    "deepseek/deepseek-r1-0528:free",
+    "deepseek/deepseek-chat-v3-0324:free",
     "meta-llama/llama-3.3-8b-instruct:free",
   ],
 };

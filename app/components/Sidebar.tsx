@@ -268,7 +268,7 @@ export const Sidebar = () => {
           </DropdownMenuTrigger>
           <DropdownMenuContent>
             <DropdownMenuItem>
-              <div className="flex items-center gap-2">
+              <div className="flex items-end -mb-1 gap-2">
                 <UserIcon className="w-4 h-4" />
                 <span>{user?.name}</span>
                 <span className="text-xs text-zinc-400">{user?.email}</span>
@@ -282,7 +282,7 @@ export const Sidebar = () => {
                 )
               }
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-end -mb-1 gap-2">
                 <DatabaseIcon className="w-4 h-4" />
                 <span>Feedback</span>
               </div>
@@ -292,13 +292,13 @@ export const Sidebar = () => {
                 window.open("https://github.com/lalit2005/cray", "_blank")
               }
             >
-              <div className="flex items-center gap-2">
+              <div className="flex items-end -mb-1 gap-2">
                 <GithubIcon className="w-4 h-4" />
                 <span>GitHub</span>
               </div>
             </DropdownMenuItem>
             <DropdownMenuItem onClick={logout}>
-              <div className="flex items-center gap-2 text-red-400">
+              <div className="flex items-end -mb-1 gap-2 text-red-400">
                 <LogOutIcon className="w-4 h-4" />
                 <span>Logout</span>
               </div>
