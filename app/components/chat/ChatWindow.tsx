@@ -74,7 +74,7 @@ export const ChatWindow: React.FC = () => {
         handleInputChange={handleInputChange}
         handleSendMessage={handleSendMessage}
         status={status}
-        chatError={chatError && chatError}
+        chatError={chatError ?? null}
         currentProvider={currentProvider}
         currentModel={currentModel}
         setCurrentProvider={setCurrentProvider}

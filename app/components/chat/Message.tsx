@@ -5,6 +5,8 @@ import remarkGfm from "remark-gfm";
 import rehypeRaw from "rehype-raw";
 import clsx from "clsx";
 import toast from "react-hot-toast";
+import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
+import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 
 interface MessageProps {
   message: MessageType;
@@ -79,6 +81,70 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
               components={{
+                code({ className = "", children, ...props }) {
+                  // react-markdown v8+ passes 'inline' as a prop, but types may not include it
+                  // @ts-expect-error: 'inline' may not be typed
+                  const inline = props.inline ?? false;
+                  const match = /language-(\w+)/.exec(className);
+                  const language = match ? match[1] : "";
+                  if (!inline && language) {
+                    return (
+                      <div className="relative">
+                        <button
+                          className="absolute right-2 top-2 p-1 rounded-md bg-zinc-700/70 text-zinc-300 hover:bg-zinc-600 hover:text-amber-500 transition-colors"
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              String(children).replace(/\n$/, "")
+                            );
+                            toast.success("Code copied to clipboard");
+                          }}
+                          title="Copy code"
+                          aria-label="Copy code to clipboard"
+                        >
+                          <svg
+                            xmlns="http://www.w3.org/2000/svg"
+                            width="16"
+                            height="16"
+                            fill="currentColor"
+                            viewBox="0 0 16 16"
+                          >
+                            <path d="M4 1.5H3a2 2 0 0 0-2 2V14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V3.5a2 2 0 0 0-2-2h-1v1h1a1 1 0 0 1 1 1V14a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3.5a1 1 0 0 1 1-1h1v-1Z" />
+                            <path d="M9.5 1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-3a.5.5 0 0 1-.5-.5v-1a.5.5 0 0 1 .5-.5h3Zm-3-1A1.5 1.5 0 0 0 5 1.5v1A1.5 1.5 0 0 0 6.5 4h3A1.5 1.5 0 0 0 11 2.5v-1A1.5 1.5 0 0 0 9.5 0h-3Z" />
+                          </svg>
+                        </button>
+                        <SyntaxHighlighter
+                          style={oneDark}
+                          language={language}
+                          customStyle={{
+                            borderRadius: "0.375rem",
+                            padding: 0,
+                            margin: 0,
+                            background: "none",
+                          }}
+                          codeTagProps={{
+                            style: {
+                              background: "none",
+                              padding: "1rem",
+                              display: "block",
+                            },
+                          }}
+                          {...props}
+                        >
+                          {String(children).replace(/\n$/, "")}
+                        </SyntaxHighlighter>
+                      </div>
+                    );
+                  }
+                  // Proper inline code rendering
+                  return (
+                    <code
+                      className="px-1 py-0.5 rounded text-amber-600 font-mono text-[0.95em]"
+                      {...props}
+                    >
+                      {children}
+                    </code>
+                  );
+                },
                 table: ({ ...props }) => (
                   <div className="overflow-x-auto">
                     <table
