@@ -9,11 +9,11 @@ export default async function (c: Context) {
     const { messages, provider, model, apiKey } =
       (await c.req.json()) as ChatRequest;
 
-    console.log("Request received:", {
-      provider,
-      model,
-      apiKey: apiKey ? "provided" : "not provided",
-    });
+    // console.log("Request received:", {
+    //   provider,
+    //   model,
+    //   apiKey: apiKey ? "provided" : "not provided",
+    // });
 
     if (!messages || !Array.isArray(messages) || messages.length === 0) {
       return c.json({ error: "Messages array is required" }, 400);
@@ -275,7 +275,7 @@ export default async function (c: Context) {
                   },
                 ],
                 onFinish: (msg) => {
-                  console.log("Last resort fallback succeeded:", msg);
+                  // console.log("Last resort fallback succeeded:", msg);
                 },
                 onError: (finalError) => {
                   console.error("Last resort also failed:", finalError);

@@ -296,7 +296,7 @@ app.post("/fetch-new-records", authMiddleware, async (c) => {
       : [],
   }));
 
-  console.log({ serverChanges });
+  // console.log({ serverChanges });
 
   return c.json(serverChanges);
 });
