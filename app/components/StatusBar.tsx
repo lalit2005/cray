@@ -62,10 +62,11 @@ function StatusBar() {
     }
   }, [showNotesSidebar, chat?.id, chat?.notes]);
 
-  // Add keyboard shortcut (Alt+N) to toggle notes sidebar
+  // Add keyboard shortcut (Alt+N/Option+N) to toggle notes sidebar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.altKey && e.key === "n") {
+      // Support both Alt+N (Windows/Linux) and Option+N (Mac)
+      if (e.altKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
 
         // If we're about to close the sidebar, ensure notes are saved first
@@ -300,8 +301,11 @@ function StatusBar() {
               <h3 className="text-zinc-300">Notes</h3>
               <div className="text-xs text-zinc-500 mt-1">
                 Press <kbd className="px-1 py-0.5 text-xs lowercase">Esc</kbd>{" "}
-                or <kbd className="px-1 py-0.5 text-xs lowercase">Alt+N</kbd> to
-                close
+                or{" "}
+                <kbd className="px-1 py-0.5 text-xs lowercase">
+                  {navigator.platform.includes("Mac") ? "⌥+N" : "Alt+N"}
+                </kbd>{" "}
+                to close
               </div>
             </div>
             <button

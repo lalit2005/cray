@@ -1,6 +1,6 @@
 import type { MetaFunction } from "@remix-run/node";
 import { Sidebar } from "~/components/Sidebar";
-import { ChatWindow } from "~/components/ChatWindow";
+// import { ChatWindow } from "~/components/ChatWindow";
 import StatusBar from "~/components/StatusBar";
 import HomepageStatusBar from "~/components/HomepageStatusBar";
 import { Toaster } from "react-hot-toast";
@@ -9,6 +9,7 @@ import { useAuth } from "~/lib/auth";
 import { useNavigate, useSearchParams } from "@remix-run/react";
 import { useEffect } from "react";
 import { syncAllData } from "~/lib/sync";
+import { ChatWindow } from "~/components/chat/ChatWindow";
 
 export const meta: MetaFunction = () => {
   return [
