@@ -6,6 +6,7 @@ import { API_BASE_URL } from "~/lib/axios";
 import { LLMProvider, Message } from "./types";
 import toast from "react-hot-toast";
 import { useNavigate } from "@remix-run/react";
+import { useAuth } from "~/lib/auth";
 
 export function useChatInteraction(chatId: string | null, messages: Message[]) {
   const navigate = useNavigate();
@@ -14,6 +15,7 @@ export function useChatInteraction(chatId: string | null, messages: Message[]) {
   const [currentModel, setCurrentModel] = useState<string>(
     "gemini-2.5-flash-preview-04-17"
   );
+  const { token } = useAuth();
 
   // Keep track of the assistant message ID that's currently being updated
   const currentAssistantMessageIdRef = useRef<string | null>(null);
@@ -78,6 +80,8 @@ export function useChatInteraction(chatId: string | null, messages: Message[]) {
     credentials: "include",
     headers: {
       "Content-Type": "application/json",
+      Authorization: "Bearer " + token,
+      Token: token!,
     },
     sendExtraMessageFields: true,
     onResponse: () => {
