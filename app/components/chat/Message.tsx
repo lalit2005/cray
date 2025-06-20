@@ -7,6 +7,7 @@ import clsx from "clsx";
 import toast from "react-hot-toast";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
+// import { gruvboxDark as oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 
 interface MessageProps {
   message: MessageType;
@@ -122,6 +123,7 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
                             background: "none",
                           }}
                           codeTagProps={{
+                            className: "font-mono text-sm",
                             style: {
                               background: "none",
                               padding: "1rem",
@@ -138,7 +140,7 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
                   // Proper inline code rendering
                   return (
                     <code
-                      className="px-1 py-0.5 rounded text-amber-600 font-mono text-[0.95em]"
+                      className="px-1 py-0.5 rounded text-amber-600 font-mono text-sm"
                       {...props}
                     >
                       {children}
@@ -180,10 +182,20 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
 
         {/* Message metadata */}
         <div className="mt-2 text-xs opacity-70 flex justify-between items-center">
-          <span className="capitalize mr-1">
+          <span
+            className="capitalize mr-5"
+            // aria-label={message.role === "assistant" ? message.model : ""}
+            // title={message.role === "assistant" ? message.model : ""}
+          >
             {message.role === "assistant" ? message.provider : "You"}
+            {message.role === "assistant" && (
+              <div className="lowercase inline">
+                <span className="mx-1">&bull;</span>
+                <span>{message.model}</span>
+              </div>
+            )}
           </span>
-          <span className="ml-1">
+          <span className="ml-5">
             {new Date(message.createdAt || Date.now()).toLocaleTimeString()}
           </span>
         </div>

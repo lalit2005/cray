@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@remix-run/react";
 import { Button } from "./ui/Button";
-import { db } from "~/localdb";
+import { db, Chats } from "~/localdb";
 import { useLiveQuery } from "dexie-react-hooks";
 import clsx from "clsx";
 import {
@@ -159,7 +159,7 @@ export const Sidebar = () => {
       })
   );
 
-  const [results, setResults] = useState(chats || []);
+  const [results, setResults] = useState<Chats[]>(chats || []);
   useEffect(() => {
     setResults(chats || []);
   }, [chats]);
@@ -194,7 +194,7 @@ export const Sidebar = () => {
             <span className="text-zinc-400">/</span>
           </div>
         </div>
-        <div className="mt-4 max-h-[65vh] overflow-y-auto">
+        <div className="mt-4 h-[calc(100vh-350px)] overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent hover:scrollbar-thumb-zinc-600 transition-colors duration-200 scroll-smooth overscroll-contain">
           {results?.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
               <div className="bg-zinc-800/50 p-6 rounded-full mb-4">
@@ -215,20 +215,19 @@ export const Sidebar = () => {
                     to={`/?id=${chat.id}`}
                     tabIndex={0}
                     className={clsx(
-                      "overflow-hidden px-2 py-1 my-3 ring ring-zinc-900 sm:border border-zinc-900 focus:outline-none block sm:bg-gradient-to-br from-zinc-900/20 to-zinc-900/70 hover:from-zinc-900/40 hover:to-zinc-900/80 focus:from-zinc-900/40 focus:to-zinc-900/80 focus:ring focus:ring-zinc-800 relative"
+                      "overflow-hidden px-3 py-2 my-2 mx-0.5 rounded border border-zinc-800 focus:outline-none block bg-gradient-to-br from-zinc-900/30 to-zinc-900/60 hover:from-zinc-900/40 hover:to-zinc-900/80 focus:from-zinc-900/40 focus:to-zinc-900/80 focus:ring-1 focus:ring-zinc-700 transition-all duration-200 relative"
+                      // chat.isPinned && "shadow-inner shadow-amber-900/30"
                     )}
                   >
-                    <p className="text-sm">
+                    <p className="text-sm font-medium text-zinc-300 truncate">
                       {chat.title +
                         (import.meta.env.DEV
                           ? " - " + chat.id.slice(0, 5)
                           : "")}
-                      <span className="ml-2 absolute right-2">
+                      <span className="absolute right-2 top-1/2 -translate-y-1/2">
                         {chat.isPinned ? (
                           <PinIcon className="w-4 h-4 text-amber-500" />
-                        ) : (
-                          <></>
-                        )}
+                        ) : null}
                       </span>
                     </p>
                   </Link>
@@ -309,38 +308,3 @@ export const Sidebar = () => {
     </div>
   );
 };
-
-// const exampleAIChatTitles = [
-//   {
-//     title: "Explanation of DHCP in detail",
-//     id: "le32nam3",
-//   },
-//   {
-//     title: "How to use Remix with TypeScript",
-//     id: "a1b2c3d4",
-//   },
-//   {
-//     title: "Best practices for React performance",
-//     id: "x9y8z7w6",
-//   },
-//   {
-//     title: "Understanding the Virtual DOM",
-//     id: "v5u6t7s8",
-//   },
-//   {
-//     title: "CSS Grid vs Flexbox",
-//     id: "g1h2i3j4",
-//   },
-//   {
-//     title: "JavaScript ES6 features",
-//     id: "k5l6m7n8",
-//   },
-//   {
-//     title: "Building REST APIs with Node.js",
-//     id: "o9p0q1r2",
-//   },
-//   {
-//     title: "Introduction to GraphQL",
-//     id: "s3t4u5v6",
-//   },
-// ];

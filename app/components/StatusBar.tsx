@@ -1,13 +1,12 @@
 import {
-  ArchiveRestore,
   FileText,
-  Pin,
   Trash2,
   Wifi,
   Database,
   XCircle,
   RefreshCw,
   AlertCircle,
+  Tag,
   Share2,
 } from "lucide-react";
 import { db } from "~/localdb";
@@ -38,29 +37,21 @@ function StatusBar() {
   const [showDebugInfo, setShowDebugInfo] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
   const [showNotesSidebar, setShowNotesSidebar] = useState(false);
+  const [tagInput, setTagInput] = useState("");
   const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
+  const tagsInputRef = useRef<HTMLInputElement>(null);
+  const focusModeRef = useRef<"tags" | null>(null);
 
   // Determine if we're in development mode
   const isDevelopment = import.meta.env.DEV;
 
   // Update notes from chat data and set focus when sidebar opens
   useEffect(() => {
-    if (showNotesSidebar && notesTextareaRef.current) {
-      // We should only update the textarea when the chat changes or sidebar opens,
-      // not on every render to avoid overwriting user input
-      const notesContent = chat?.notes || "";
-
-      // Only update if the value has actually changed from what's in the database
-      if (notesTextareaRef.current.value !== notesContent) {
-        notesTextareaRef.current.value = notesContent;
-      }
-
-      // Focus the textarea after a small delay
-      setTimeout(() => {
-        notesTextareaRef.current?.focus();
-      }, 100);
+    if (showNotesSidebar && tagsInputRef.current) {
+      tagsInputRef.current.focus();
+      focusModeRef.current = null;
     }
-  }, [showNotesSidebar, chat?.id, chat?.notes]);
+  }, [showNotesSidebar]);
 
   // Add keyboard shortcut (Alt+N/Option+N) to toggle notes sidebar
   useEffect(() => {
@@ -81,7 +72,22 @@ function StatusBar() {
           }
         }
 
-        setShowNotesSidebar((prev) => !prev);
+        if (!showNotesSidebar) {
+          focusModeRef.current = "tags";
+          setShowNotesSidebar(true);
+        } else {
+          // Ensure notes are saved before closing
+          if (notesTextareaRef.current) {
+            const value = notesTextareaRef.current.value;
+            if (chatId && value !== chat?.notes) {
+              db.chats.update(chatId, {
+                notes: value,
+                updatedAt: new Date(),
+              });
+            }
+          }
+          setShowNotesSidebar(false);
+        }
       }
 
       // Close notes with Escape key
@@ -291,6 +297,34 @@ function StatusBar() {
   const messageCount =
     useLiveQuery(() => db.messages.where("chatId").equals(chatId).count()) || 0;
 
+  const openNotesSidebarAndFocusTags = () => {
+    focusModeRef.current = "tags";
+    setShowNotesSidebar(true);
+  };
+
+  // Add tag to chat
+  const addTag = async () => {
+    if (!chatId || !tagInput.trim()) return;
+    const newTag = tagInput.trim();
+    const existingTags = chat?.tags || [];
+    if (existingTags.includes(newTag)) return;
+    await db.chats.update(chatId, {
+      tags: [...existingTags, newTag],
+      updatedAt: new Date(),
+    });
+    setTagInput("");
+  };
+
+  // Remove tag from chat
+  const removeTag = async (tagToRemove: string) => {
+    if (!chatId) return;
+    const newTags = (chat?.tags || []).filter((t) => t !== tagToRemove);
+    await db.chats.update(chatId, {
+      tags: newTags,
+      updatedAt: new Date(),
+    });
+  };
+
   return chat ? (
     <>
       {/* Notes Sidebar */}
@@ -331,6 +365,60 @@ function StatusBar() {
             </button>
           </div>
           <div className="flex-grow flex flex-col h-full pb-8">
+            {/* Tags Section */}
+            <div className="p-3 border-b border-zinc-700 bg-zinc-800/30">
+              <div className="flex justify-between items-center mb-2">
+                <h4 className="text-zinc-300 text-sm">Tags</h4>
+                <Tag size={14} className="text-zinc-400" />
+              </div>
+              <div className="flex flex-wrap gap-1 mb-2">
+                {chat.tags?.map((tag) => (
+                  <span
+                    key={tag}
+                    className="bg-zinc-600/70 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
+                  >
+                    <span>#{tag}</span>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeTag(tag);
+                      }}
+                      className="text-white/70 hover:text-white"
+                    >
+                      &times;
+                    </button>
+                  </span>
+                ))}
+                {chat.tags?.length === 0 && (
+                  <span className="text-zinc-500 text-xs italic">
+                    No tags yet
+                  </span>
+                )}
+              </div>
+              <div className="flex">
+                <input
+                  ref={tagsInputRef}
+                  type="text"
+                  value={tagInput}
+                  onChange={(e) => setTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      addTag();
+                    }
+                  }}
+                  className="flex-grow bg-zinc-800 border border-zinc-700 px-2 py-1 rounded-l text-zinc-200 text-xs"
+                  placeholder="Add a tag..."
+                />
+                <button
+                  onClick={addTag}
+                  className="bg-zinc-600/80 hover:bg-zinc-600 text-white px-2 py-1 rounded-r text-xs"
+                >
+                  Add
+                </button>
+              </div>
+            </div>
+            {/* Notes Section */}
             <textarea
               ref={notesTextareaRef}
               className="w-full h-full flex-grow !bg-zinc-900 border-0 resize-none p-4 shadow-inner"
@@ -409,6 +497,37 @@ function StatusBar() {
               <span className="uppercase" title="Message count">
                 {messageCount} {messageCount === 1 ? "Message" : "Messages"}
               </span>
+              {/* Display tags inline */}
+              {chat.tags?.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="flex items-center gap-1">
+                    {chat.tags.slice(0, 3).map((tag) => (
+                      <button
+                        key={tag}
+                        type="button"
+                        className="text-blue-400 text-[11px] cursor-pointer hover:underline bg-transparent border-0 p-0 m-0 focus:outline-none"
+                        onClick={openNotesSidebarAndFocusTags}
+                        tabIndex={0}
+                        aria-label={`Edit tag: #${tag}`}
+                      >
+                        #{tag}
+                      </button>
+                    ))}
+                    {chat.tags.length > 3 && (
+                      <button
+                        type="button"
+                        className="text-zinc-400 text-[11px] cursor-pointer hover:underline bg-transparent border-0 p-0 m-0 focus:outline-none"
+                        onClick={openNotesSidebarAndFocusTags}
+                        tabIndex={0}
+                        aria-label="Show all tags"
+                      >
+                        +{chat.tags.length - 3}
+                      </button>
+                    )}
+                  </div>
+                </>
+              )}
             </>
           ) : (
             <span className="uppercase">{allChatsCount} Chats</span>
@@ -438,88 +557,90 @@ function StatusBar() {
               <span className="uppercase" title="Creation date">
                 {new Date(chat.createdAt).toLocaleDateString()}
               </span>
-
               <Separator />
 
-              {/* Share Button */}
+              {/* Share2 (Public Sharing) Button */}
               <button
-                title={chat.isPublic ? "Make Private" : "Share Chat"}
-                aria-label={chat.isPublic ? "Make private" : "Share chat"}
+                type="button"
+                title={
+                  chat.isPublic
+                    ? "Make Private / Unshare"
+                    : "Make Public & Copy Share Link"
+                }
+                aria-label={
+                  chat.isPublic
+                    ? "Make chat private"
+                    : "Make chat public and copy share link"
+                }
+                onClick={toggleShareStatus}
+                className={`$${
+                  chat.isPublic
+                    ? "text-green-400 hover:text-green-300"
+                    : "text-zinc-400 hover:text-blue-400"
+                }`}
               >
                 <Share2
-                  size={30}
-                  className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 ${
-                    chat.isPublic ? "text-green-500 hover:!text-green-500" : ""
+                  size={28}
+                  className={`inline-block align-middle transition-colors duration-150 ${
+                    chat.isPublic
+                      ? "text-green-400 hover:text-green-300"
+                      : "text-zinc-400 hover:text-blue-400"
                   }`}
-                  onClick={toggleShareStatus}
                 />
               </button>
+              <Separator />
 
-              {/* Pin/Bookmark Button */}
+              {/* Tag Button */}
               <button
-                title="Pin/Bookmark Chat"
-                aria-label="Pin or bookmark chat"
+                type="button"
+                title={`${showNotesSidebar ? "Close" : "Show"} Tags (Alt+T)`}
+                aria-label={`${showNotesSidebar ? "Close" : "Show"} tags`}
+                onClick={() => {
+                  if (!showNotesSidebar) {
+                    openNotesSidebarAndFocusTags();
+                  } else {
+                    setShowNotesSidebar(false);
+                  }
+                }}
               >
-                <Pin
-                  size={30}
-                  className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 -mb-0.5 ${
-                    chat.isPinned ? "text-amber-600 hover:!text-amber-600" : ""
+                <Tag
+                  size={28}
+                  className={`inline-block hover:text-blue-400 hover:bg-zinc-800 ${
+                    chat?.tags?.length > 0
+                      ? "text-blue-400 hover:!text-blue-400"
+                      : ""
+                  } ${
+                    showNotesSidebar ? "text-blue-400 hover:!text-blue-400" : ""
                   }`}
-                  onClick={() => {
-                    db.chats
-                      .update(chat.id, {
-                        isPinned: chat.isPinned ? 0 : 1,
-                        updatedAt: new Date(),
-                      })
-                      .then(() => {
-                        toast.success(chat.isPinned ? "Unpinned" : "Pinned");
-                      });
-                  }}
                 />
               </button>
 
-              {/* Archive Button */}
-              <button title="Archive Chat" aria-label="Archive chat">
-                <ArchiveRestore
-                  size={30}
-                  className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 ${
-                    chat.inTrash ? "text-amber-600 hover:!text-amber-600" : ""
-                  }`}
-                  onClick={() => {
-                    db.chats
-                      .update(chat.id, {
-                        inTrash: chat.inTrash ? 0 : 1,
-                        updatedAt: new Date(),
-                      })
-                      .then(() => {
-                        toast.success(chat.inTrash ? "Restored" : "Archived");
-                      });
-                  }}
-                />
-              </button>
-
-              {/* Notes Button for sidebar toggle */}
+              {/* Notes Button for sidebar toggle - now includes tags management */}
               <button
                 type="button"
                 title={`${showNotesSidebar ? "Close" : "Show"} Notes (Alt+N)`}
                 aria-label={`${showNotesSidebar ? "Close" : "Show"} notes`}
                 onClick={() => {
-                  // If closing the sidebar, ensure notes are saved first
-                  if (showNotesSidebar && notesTextareaRef.current) {
-                    const value = notesTextareaRef.current.value;
-                    // Force an immediate save instead of debounced
-                    if (chatId && value !== chat?.notes) {
-                      db.chats.update(chatId, {
-                        notes: value,
-                        updatedAt: new Date(),
-                      });
+                  if (!showNotesSidebar) {
+                    focusModeRef.current = "tags";
+                    setShowNotesSidebar(true);
+                  } else {
+                    // Ensure notes are saved before closing
+                    if (notesTextareaRef.current) {
+                      const value = notesTextareaRef.current.value;
+                      if (chatId && value !== chat?.notes) {
+                        db.chats.update(chatId, {
+                          notes: value,
+                          updatedAt: new Date(),
+                        });
+                      }
                     }
+                    setShowNotesSidebar(false);
                   }
-                  setShowNotesSidebar(!showNotesSidebar);
                 }}
               >
                 <FileText
-                  size={30}
+                  size={28}
                   className={`inline-block hover:text-zinc-300 hover:bg-zinc-800 ${
                     chat?.notes ? "text-amber-600 hover:!text-amber-600" : ""
                   } ${
@@ -547,8 +668,6 @@ function StatusBar() {
                   }}
                 />
               </button>
-
-              <Separator />
             </>
           )}
 
