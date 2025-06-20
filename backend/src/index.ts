@@ -1,12 +1,10 @@
 import { Context, Hono, Next } from "hono";
 import { cors } from "hono/cors";
 import { createDbClient, schema } from "./db";
-import { and, eq, gt, gte, or } from "drizzle-orm";
-import { User } from "./schema";
+import { and, eq, gt, or } from "drizzle-orm";
 import { sign, verify } from "hono/jwt";
 import { getCookie, setCookie, deleteCookie } from "hono/cookie";
 import { genSaltSync, hashSync, compareSync } from "bcrypt-edge";
-import { mockChat } from "./lib/mockChat";
 import { sync } from "./lib/sync";
 import { SyncRequest, SyncResponse } from "./lib/sync-interface";
 import chat from "./lib/chat";
@@ -36,12 +34,18 @@ app.use(
     ],
     // allow credentials (cookies) to be sent
     credentials: true,
+    // expose cookie headers and allow Authorization header
     exposeHeaders: ["set-cookie", "Set-Cookie"],
+    allowHeaders: ["Content-Type", "Authorization", "token"],
   })
 );
 
 const authMiddleware = async (c: Context, next: Next) => {
-  const token = (getCookie(c, "token") || c.req.header("token")) as string;
+  // Check for token in cookie first, then in Authorization header, then in custom token header
+  const token = (getCookie(c, "token") ||
+    c.req.header("Authorization")?.replace("Bearer ", "") ||
+    c.req.header("token")) as string;
+
   if (!token) return c.json({ error: "Unauthorized!!" }, 401);
 
   try {
@@ -58,6 +62,7 @@ const authMiddleware = async (c: Context, next: Next) => {
       token,
       cookie: getCookie(c, "token"),
       tokenHeader: c.req.header("token"),
+      authHeader: c.req.header("Authorization"),
     });
     return c.json({ error: "Invalid jwt token!!" }, 401);
   }
@@ -112,10 +117,13 @@ app.post("/signup", async (c) => {
   });
 
   // Return user data without sensitive information
-  const { passwordHash: _, ...userData } = user;
+  const { passwordHash: _, ...userData } = user; // Use _ to indicate unused variable
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void _; // Prevent unused variable warning
+
   return c.json({
     message: "User created and logged in",
-    token: token,
+    token: token, // Explicitly return token in the response for in-memory storage
     user: userData,
   });
 });
@@ -156,10 +164,13 @@ app.post("/login", async (c) => {
   });
 
   // Return user data without sensitive information
-  const { passwordHash, ...userData } = user;
+  const { passwordHash: _, ...userData } = user; // Use _ to indicate unused variable
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  void _; // Prevent unused variable warning
+
   return c.json({
     message: "Logged in",
-    token: token,
+    token: token, // Explicitly return token in the response for in-memory storage
     user: userData,
   });
 });

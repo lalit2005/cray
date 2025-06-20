@@ -7,7 +7,6 @@ import clsx from "clsx";
 import toast from "react-hot-toast";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
-// import { gruvboxDark as oneDark } from "react-syntax-highlighter/dist/cjs/styles/prism";
 
 interface MessageProps {
   message: MessageType;
@@ -172,6 +171,9 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
                 ),
                 td: ({ ...props }) => (
                   <td className="px-4 py-2 text-sm text-zinc-300" {...props} />
+                ),
+                strong: ({ ...props }) => (
+                  <strong className="text-zinc-200  font-semibold" {...props} />
                 ),
               }}
             >

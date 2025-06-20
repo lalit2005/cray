@@ -3,6 +3,7 @@ import { useNavigate } from "@remix-run/react";
 import toast from "react-hot-toast";
 import api from "~/lib/axios";
 import { db } from "~/localdb";
+import tokenStore from "~/lib/tokenStore";
 
 interface User {
   email: string;
@@ -25,6 +26,7 @@ interface AuthContextValue {
   signup: (input: SignupInput) => Promise<void>;
   logout: () => Promise<void>;
   refresh: () => Promise<void>;
+  token: string | null; // Add token to the context
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -33,6 +35,22 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const navigate = useNavigate();
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [token, setToken] = useState<string | null>(null); // Add token state
+
+  // Update the token in both state and tokenStore whenever it changes
+  const updateToken = (newToken: string | null) => {
+    setToken(newToken);
+    tokenStore.setToken(newToken);
+  };
+
+  // Set token in memory whenever it changes
+  useEffect(() => {
+    if (token) {
+      tokenStore.setToken(token);
+    } else {
+      tokenStore.clearToken();
+    }
+  }, [token]);
 
   const refresh = async () => {
     try {
@@ -40,6 +58,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       setUser(res.data.user as User);
     } catch (err) {
       setUser(null);
+      updateToken(null); // Clear token on failed refresh
     } finally {
       setLoading(false);
     }
@@ -56,9 +75,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       toast.success(res.data.message || "Logged in");
       // Update user state with the user data from the response
       setUser(res.data.user);
+      updateToken(res.data.token); // Store token in memory and tokenStore
       navigate("/");
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Login failed");
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "response" in err) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(error.response?.data?.error || "Login failed");
+      } else {
+        toast.error("Login failed");
+      }
       throw err;
     }
   };
@@ -69,9 +94,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       toast.success(res.data.message || "Account created");
       // Update user state with the user data from the response
       setUser(res.data.user);
+      updateToken(res.data.token); // Store token in memory and tokenStore
       navigate("/");
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || "Signup failed");
+    } catch (err: unknown) {
+      if (err && typeof err === "object" && "response" in err) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(error.response?.data?.error || "Signup failed");
+      } else {
+        toast.error("Signup failed");
+      }
       throw err;
     }
   };
@@ -79,11 +110,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const logout = async () => {
     try {
       await api.post("/logout");
-    } catch {}
+    } catch (err) {
+      // Ignore errors during logout
+      console.error("Error during logout:", err);
+    }
     db.tables.forEach((a) => {
       a.clear();
     });
     setUser(null);
+    updateToken(null); // Clear token from memory and tokenStore
     navigate("/login");
   };
 
@@ -94,6 +129,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     signup,
     logout,
     refresh,
+    token, // Expose token through context
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

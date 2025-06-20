@@ -274,9 +274,9 @@ export default async function (c: Context) {
                     content: userMessageContent,
                   },
                 ],
-                onFinish: (msg) => {
-                  // console.log("Last resort fallback succeeded:", msg);
-                },
+                // onFinish: (msg) => {
+                // console.log("Last resort fallback succeeded:", msg);
+                // },
                 onError: (finalError) => {
                   console.error("Last resort also failed:", finalError);
                 },
