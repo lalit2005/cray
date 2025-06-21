@@ -55,6 +55,10 @@ kbd {
   display: none;
 }
 
+#cmdk-dialog .lucide {
+  @apply h-5 w-5 inline mr-1.5 -mb-1;
+}
+
 .msg,
 textarea,
 .sidebar {

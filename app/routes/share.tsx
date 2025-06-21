@@ -54,7 +54,14 @@ export default function ShareRoute() {
 
         if (response.data && response.data.chat) {
           setChatData(response.data.chat);
-          setMessages(response.data.messages || []);
+          setMessages(
+            (response.data.messages as ChatMessage[]).sort((a, b) => {
+              return (
+                new Date(a.createdAt).getTime() -
+                new Date(b.createdAt).getTime()
+              );
+            }) || []
+          );
         } else {
           setError("Invalid response format from server");
         }
@@ -79,15 +86,6 @@ export default function ShareRoute() {
 
     fetchSharedChat();
   }, [chatId]);
-
-  // Scroll to bottom on load and when messages change
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
-
-  useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
 
   // If no chatId provided
   if (!chatId) {
@@ -119,7 +117,7 @@ export default function ShareRoute() {
   if (error || !chatData) {
     return (
       <div className="flex flex-col items-center justify-center h-screen bg-zinc-950 text-zinc-300">
-        <Lock size={48} className="mb-4 text-zinc-500" />
+        <Lock className="mb-4 text-zinc-500 h-52 w-52" />
         <h1 className="text-2xl font-bold mb-2">Private Chat</h1>
         <p className="mb-6 text-zinc-400 text-center max-w-md">
           {error ||

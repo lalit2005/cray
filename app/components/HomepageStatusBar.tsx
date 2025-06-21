@@ -5,6 +5,7 @@ import {
   AlertCircle,
   Pin,
   Trash2,
+  Command as CommandIcon,
 } from "lucide-react";
 import { db } from "~/localdb";
 import { useLiveQuery } from "dexie-react-hooks";
@@ -13,6 +14,7 @@ import { syncAllData } from "~/lib/sync";
 import { Dialog, DialogContent, DialogTrigger } from "./ui/Dialog";
 import toast from "react-hot-toast";
 import { useNavigate } from "@remix-run/react";
+import { CommandMenu } from "./CommandMenu";
 
 function Separator() {
   return <span className="mx-2"> &bull; </span>;
@@ -20,12 +22,12 @@ function Separator() {
 
 export default function HomepageStatusBar() {
   const navigate = useNavigate();
+  const [cmdkOpen, setCmdkOpen] = useState(false); // Command menu state
   const allChatsCount = useLiveQuery(() => db.chats.count()) || 0;
   const pinnedChatsCount =
     useLiveQuery(() => db.chats.where("isPinned").equals(1).count()) || 0;
   const trashedChatsCount =
     useLiveQuery(() => db.chats.where("inTrash").equals(1).count()) || 0;
-  const messagesCount = useLiveQuery(() => db.messages.count()) || 0;
   const chatsWithNotes =
     useLiveQuery(() => db.chats.where("notes").notEqual("").toArray()) || [];
 
@@ -96,6 +98,20 @@ export default function HomepageStatusBar() {
     };
   }, []);
 
+  // Add keyboard shortcut for Command+K / Ctrl+K
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Support Command+K / Ctrl+K to toggle command menu
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCmdkOpen((open) => !open);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
+
   // Function to manually trigger sync
   const handleManualSync = async () => {
     if (isSyncing) return;
@@ -146,8 +162,25 @@ export default function HomepageStatusBar() {
         )}
       </div>
 
-      {/* Right side: Notes button and Sync status */}
+      {/* Right side: Command Menu, Notes button and Sync status */}
       <div className="flex items-center space-x-4">
+        {/* Command Menu Button */}
+        <button
+          onClick={() => setCmdkOpen(true)}
+          title="Command Menu (Cmd+K / Ctrl+K)"
+          aria-label="Open command menu"
+          className="flex items-center hover:text-zinc-300 uppercase"
+        >
+          <CommandIcon size={16} className="mr-1 -mb-1" />
+          <span className="mr-1">Menu</span>
+          <span className="ml-1 font-mono text-xs">
+            <kbd>{navigator.userAgent.includes("Mac") ? "⌘" : "ctrl"}</kbd>+
+            <kbd>k</kbd>
+          </span>
+        </button>
+
+        <Separator />
+
         {/* Notes Button */}
         <Dialog>
           <DialogTrigger asChild>
@@ -236,6 +269,15 @@ export default function HomepageStatusBar() {
           {syncStatus}
         </button>
       </div>
+
+      {/* Command Menu - global keyboard commands */}
+      <CommandMenu
+        open={cmdkOpen}
+        onOpenChange={setCmdkOpen}
+        chatId={null}
+        showNotesSidebar={false}
+        setShowNotesSidebar={() => {}}
+      />
     </div>
   );
 }

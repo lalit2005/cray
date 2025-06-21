@@ -8,6 +8,7 @@ import {
   AlertCircle,
   Tag,
   Share2,
+  Command as CommandIcon,
 } from "lucide-react";
 import { db } from "~/localdb";
 import toast from "react-hot-toast";
@@ -16,6 +17,7 @@ import { useLiveQuery } from "dexie-react-hooks";
 import { useEffect, useState, useRef } from "react";
 import debounce from "lodash/debounce";
 import { syncAllData } from "~/lib/sync";
+import { CommandMenu } from "~/components/CommandMenu";
 
 function Separator() {
   return <span className=""> &bull; </span>;
@@ -24,8 +26,8 @@ function Separator() {
 function StatusBar() {
   const [searchParams] = useSearchParams();
   const chatId = searchParams.get("id") || "";
-  const allChatsCount = useLiveQuery(() => db.chats.count());
-  const messagesCount = useLiveQuery(() => db.messages.count());
+  const allChatsCount = useLiveQuery(() => db.chats.count()) || 0;
+  const messagesCount = useLiveQuery(() => db.messages.count()) || 0;
   const chat = useLiveQuery(
     () => db.chats.where("id").equals(chatId).first(),
     [chatId]
@@ -41,6 +43,8 @@ function StatusBar() {
   const notesTextareaRef = useRef<HTMLTextAreaElement>(null);
   const tagsInputRef = useRef<HTMLInputElement>(null);
   const focusModeRef = useRef<"tags" | null>(null);
+  // Add state for command menu
+  const [cmdkOpen, setCmdkOpen] = useState(false);
 
   // Determine if we're in development mode
   const isDevelopment = import.meta.env.DEV;
@@ -54,8 +58,16 @@ function StatusBar() {
   }, [showNotesSidebar]);
 
   // Add keyboard shortcut (Alt+N/Option+N) to toggle notes sidebar
+  // and add Command+K / Ctrl+K to toggle command menu
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Support Command+K / Ctrl+K to toggle command menu
+      if (e.key.toLowerCase() === "k" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        setCmdkOpen((open) => !open);
+        return;
+      }
+
       // Support both Alt+N (Windows/Linux) and Option+N (Mac)
       if (e.altKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
@@ -327,6 +339,15 @@ function StatusBar() {
 
   return chat ? (
     <>
+      {/* Command Menu */}
+      {/* <CommandMenu
+        open={cmdkOpen}
+        onOpenChange={setCmdkOpen}
+        chatId={chatId}
+        showNotesSidebar={showNotesSidebar}
+        setShowNotesSidebar={setShowNotesSidebar}
+      /> */}
+
       {/* Notes Sidebar */}
       {showNotesSidebar && (
         <div className="fixed top-0 right-0 bottom-0 h-auto w-80 bg-zinc-900/95 border-l border-zinc-800 z-[9999] sidebar flex flex-col shadow-xl transition-all duration-300 ease-in-out">
@@ -536,6 +557,22 @@ function StatusBar() {
 
         {/* Right side: Everything else */}
         <div className="uppercase flex items-center space-x-3">
+          {/* Command menu button */}
+          <button
+            onClick={() => setCmdkOpen(true)}
+            title="Command Menu (Cmd+K / Ctrl+K)"
+            aria-label="Open command menu"
+            className="text-zinc-400 hover:text-zinc-300"
+          >
+            <CommandIcon size={24} />
+            <span className="ml-1 font-mono text-xs uppercase">
+              <kbd>{navigator.userAgent.includes("Mac") ? "⌘" : "ctrl"}</kbd>+
+              <kbd>k</kbd>
+            </span>
+          </button>
+
+          <Separator />
+
           {isDevelopment && (
             <>
               <button
@@ -698,6 +735,15 @@ function StatusBar() {
           </button>
         </div>
       </div>
+
+      {/* Command Menu (CMD+K) */}
+      <CommandMenu
+        open={cmdkOpen}
+        onOpenChange={setCmdkOpen}
+        chatId={chatId || null}
+        showNotesSidebar={showNotesSidebar}
+        setShowNotesSidebar={setShowNotesSidebar}
+      />
     </>
   ) : (
     <div></div>
