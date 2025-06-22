@@ -179,7 +179,6 @@ export default function HomepageStatusBar() {
           className="flex items-center hover:text-zinc-300 uppercase"
         >
           <CommandIcon size={16} className="mr-1 -mb-1" />
-          <span className="mr-1">Menu</span>
           <span className="ml-1 font-mono text-xs">
             <kbd>{navigator.userAgent.includes("Mac") ? "⌘" : "ctrl"}</kbd>+
             <kbd>k</kbd>
@@ -211,7 +210,7 @@ export default function HomepageStatusBar() {
                 chatsWithNotes.map((chat) => (
                   <div
                     key={chat.id}
-                    className="bg-zinc-950 p-3 rounded cursor-pointer hover:bg-zinc-900 transition-colors"
+                    className="bg-zinc-950 px-3 py-1.5 rounded cursor-pointer hover:bg-zinc-900 transition-colors"
                     onClick={() => {
                       navigate(`/?id=${chat.id}`);
                       // Close the dialog after navigation
@@ -313,11 +312,8 @@ export default function HomepageStatusBar() {
                   <div className="text-zinc-300 font-medium mb-1 truncate text-sm flex items-center justify-between">
                     {chat.title}
                     <div>
-                      <span className="text-xs text-zinc-500 mr-2">
-                        {new Date(chat.createdAt).toLocaleDateString()}
-                      </span>
                       <span className="text-xs text-zinc-500">
-                        Click to restore
+                        {new Date(chat.createdAt).toLocaleDateString()}
                       </span>
                     </div>
                   </div>

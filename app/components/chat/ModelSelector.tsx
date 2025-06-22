@@ -1,14 +1,7 @@
 import React from "react";
-import { ChevronDown } from "lucide-react";
 import { Button } from "../ui/Button";
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-} from "../ui/Dropdown";
 import { LLMProvider } from "./types";
-import { SUPPORTED_MODELS as models } from "~/lib/models";
+import { ModelSearch } from "./ModelSearch";
 import clsx from "clsx";
 
 interface ModelSelectorProps {
@@ -34,6 +27,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
 }) => {
   const isStreaming = status === "streaming" || status === "submitted";
 
+  const handleModelSelection = (provider: LLMProvider, model: string) => {
+    setCurrentProvider(provider);
+    setCurrentModel(model);
+    setTimeout(() => inputRef.current?.focus(), 100);
+  };
+
   return (
     <div className="disabled:opacity-50 disabled:cursor-wait w-full bg-gradient-to-b from-zinc-900 via-zinc-800/50 to-zinc-900 rounded-b-xl py-2 px-3 relative -top-5 inset-shadow border-2 border-zinc-800/50 backdrop-blur-xl">
       <div className="flex space-x-2">
@@ -48,56 +47,12 @@ export const ModelSelector: React.FC<ModelSelectorProps> = ({
           {isStreaming ? "Answering..." : "Send"}
         </Button>
 
-        {/* Provider Selector */}
-        <div className="relative">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="">
-                {currentProvider}
-                <ChevronDown />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {Object.keys(models).map((provider) => (
-                <DropdownMenuItem
-                  key={provider}
-                  onClick={() => {
-                    setCurrentProvider(provider as LLMProvider);
-                    // Set the first model from the new provider
-                    setCurrentModel(models[provider as LLMProvider][0]);
-                  }}
-                >
-                  {provider}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
-
-        {/* Model Selector */}
-        <div className="relative">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button className="">
-                {currentModel}
-                <ChevronDown />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent>
-              {models[currentProvider].map((model) => (
-                <DropdownMenuItem
-                  key={model}
-                  onClick={() => {
-                    setCurrentModel(model);
-                    setTimeout(() => inputRef.current?.focus(), 100);
-                  }}
-                >
-                  {model.split("/").pop()?.split(":")[0].split("-").join(" ")}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        {/* Combined Model Selector with Search */}
+        <ModelSearch
+          currentProvider={currentProvider}
+          currentModel={currentModel}
+          onSelect={handleModelSelection}
+        />
 
         {/* Keyboard shortcut hint */}
         <div className="absolute right-2 bottom-2 flex items-center gap-1">

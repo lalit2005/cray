@@ -120,7 +120,7 @@ export const Sidebar = () => {
       const focusedItem = document.activeElement;
       if (!focusedItem?.closest("li")) return;
 
-      const listItems = Array.from(document.querySelectorAll("li"));
+      const listItems = Array.from(document.querySelectorAll(".sidebar li"));
       const currentIndex = listItems.indexOf(focusedItem.closest("li")!);
 
       if (e.key === "ArrowDown" && currentIndex < listItems.length - 1) {
@@ -175,6 +175,96 @@ export const Sidebar = () => {
       });
     }
   }, [chats]);
+
+  // Group chats by date category
+  function getDateCategory(dateString: string) {
+    const date = new Date(dateString);
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const chatDay = new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate()
+    );
+    const diffMs = today.getTime() - chatDay.getTime();
+    const diffDays = diffMs / (1000 * 60 * 60 * 24);
+
+    if (diffDays === 0) return "Today";
+    if (diffDays === 1) return "Yesterday";
+
+    // Get start of this week (Monday)
+    const startOfWeek = new Date(today);
+    startOfWeek.setDate(today.getDate() - today.getDay() + 1); // Monday
+    if (chatDay >= startOfWeek && diffDays < 7) return "This week";
+
+    // Get start of last week
+    const startOfLastWeek = new Date(startOfWeek);
+    startOfLastWeek.setDate(startOfWeek.getDate() - 7);
+    const endOfLastWeek = new Date(startOfWeek);
+    endOfLastWeek.setDate(startOfWeek.getDate() - 1);
+    if (chatDay >= startOfLastWeek && chatDay <= endOfLastWeek)
+      return "Last week";
+
+    if (
+      today.getFullYear() === chatDay.getFullYear() &&
+      today.getMonth() === chatDay.getMonth()
+    ) {
+      return "Earlier this month";
+    }
+    return "Older";
+  }
+
+  function groupChatsByDate(chats: Chats[]) {
+    // Separate pinned and unpinned
+    const pinned: Chats[] = [];
+    const unpinned: Chats[] = [];
+    chats.forEach((chat) => {
+      if (chat.isPinned) {
+        pinned.push(chat);
+      } else {
+        unpinned.push(chat);
+      }
+    });
+
+    // Group unpinned by date
+    const groups: { [key: string]: Chats[] } = {};
+    unpinned.forEach((chat) => {
+      const cat = getDateCategory(chat.updatedAt.toString());
+      if (!groups[cat]) groups[cat] = [];
+      groups[cat].push(chat);
+    });
+    // Sort groups by recency
+    const order = [
+      "Today",
+      "Yesterday",
+      "This week",
+      "Last week",
+      "Earlier this month",
+      "Older",
+    ];
+    const result = [];
+    if (pinned.length > 0) {
+      result.push({
+        title: "Pinned",
+        chats: pinned.sort(
+          (a, b) =>
+            new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+        ),
+      });
+    }
+    result.push(
+      ...order
+        .filter((cat) => groups[cat]?.length)
+        .map((cat) => ({
+          title: cat,
+          chats: groups[cat].sort(
+            (a, b) =>
+              new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+          ),
+        }))
+    );
+    return result;
+  }
   return (
     <div className="px-4 py-2 relative h-screen sidebar">
       <h1 className="text inline-block mt-3">
@@ -192,12 +282,15 @@ export const Sidebar = () => {
             onKeyDown={(e) => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
-                // Focus the first chat link if available
-                const firstChat = document.querySelector(
-                  'ul.space-y-1 > li:first-child a, ul.space-y-1 > li:first-child [tabindex="0"]'
-                ) as HTMLElement | null;
-                if (firstChat) {
-                  firstChat.focus();
+                // Get the first group
+                const firstChatGroup = document.querySelector(".sidebar ul.space-y-1");
+                if (firstChatGroup) {
+                  // Find the first link in the first group
+                  const firstChat = firstChatGroup.querySelector("li a") as HTMLElement;
+                  if (firstChat) {
+                    // Focus it and stop propagation
+                    setTimeout(() => firstChat.focus(), 0);
+                  }
                 }
               }
             }}
@@ -220,40 +313,48 @@ export const Sidebar = () => {
               </p>
             </div>
           ) : (
-            <ul className="space-y-1">
-              {results?.map((chat) => {
-                // Determine if this chat is currently open by comparing pathnames and search params
-                const isActive =
-                  typeof window !== "undefined" &&
-                  window.location.search.includes(`id=${chat.id}`);
-                return (
-                  <li key={chat.id} tabIndex={-1}>
-                    <Link
-                      to={`/?id=${chat.id}`}
-                      tabIndex={0}
-                      className={clsx(
-                        "px-3 py-1 focus:outline-none rounded-md rounded-l-none relative flex items-center gap-2",
-                        isActive
-                          ? "border-l-4 border-l-amber-500 bg-zinc-800 shadow-inner shadow-amber-900/10"
-                          : "focus:bg-zinc-800 border-l-amber-500 hover:bg-zinc-900 text-zinc-300"
-                      )}
-                    >
-                      <p className="text-sm font-medium truncate w-full">
-                        {chat.title +
-                          (import.meta.env.DEV
-                            ? " - " + chat.id.slice(0, 5)
-                            : "")}
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2">
-                          {chat.isPinned ? (
-                            <PinIcon className="w-4 h-4 text-amber-500" />
-                          ) : null}
-                        </span>
-                      </p>
-                    </Link>
-                  </li>
-                );
-              })}
-            </ul>
+            <div>
+              {groupChatsByDate(results).map((group) => (
+                <div key={group.title} className="mb-3">
+                  <div className="text-xs uppercase tracking-wider text-zinc-500 font-semibold px-2 mb-1 mt-3">
+                    {group.title}
+                  </div>
+                  <ul className="space-y-1">
+                    {group.chats.map((chat) => {
+                      const isActive =
+                        typeof window !== "undefined" &&
+                        window.location.search.includes(`id=${chat.id}`);
+                      return (
+                        <li key={chat.id} tabIndex={-1}>
+                          <Link
+                            to={`/?id=${chat.id}`}
+                            tabIndex={0}
+                            className={clsx(
+                              "px-3 py-1 focus:outline-none rounded-md rounded-l-none relative flex items-center gap-2",
+                              isActive
+                                ? "border-l-4 border-l-amber-500 bg-zinc-800 shadow-inner shadow-amber-900/10"
+                                : "focus:bg-zinc-800 border-l-amber-500 hover:bg-zinc-900 text-zinc-300"
+                            )}
+                          >
+                            <p className="text-sm font-medium truncate w-full">
+                              {chat.title +
+                                (import.meta.env.DEV
+                                  ? " - " + chat.id.slice(0, 5)
+                                  : "")}
+                              <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                                {chat.isPinned ? (
+                                  <PinIcon className="w-4 h-4 text-amber-500" />
+                                ) : null}
+                              </span>
+                            </p>
+                          </Link>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       </div>
