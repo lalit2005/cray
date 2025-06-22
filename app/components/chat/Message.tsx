@@ -25,7 +25,7 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
         className={clsx(
           "p-4 max-w-[85%] lg:max-w-2xl rounded msg relative group transition-all duration-200",
           message.role === "user"
-            ? "bg-gradient-to-b from-zinc-900 via-zinc-800 to-zinc-900 shadow-inset hover:from-zinc-800 hover:via-zinc-700 hover:to-zinc-800"
+            ? "bg-gradient-to-b shadow-inset from-zinc-900 via-zinc-800 to-zinc-900"
             : "bg-zinc-950 border-2 border-zinc-900 bg-gradient-to-br from-zinc-900 via-zinc-800/30 to-zinc-900"
         )}
       >

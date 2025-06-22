@@ -189,6 +189,18 @@ export const Sidebar = () => {
             ref={inputRef}
             placeholder="Search chats"
             className="px-4 py-1 w-full rounded-r-none ring ring-zinc-800"
+            onKeyDown={(e) => {
+              if (e.key === "ArrowDown") {
+                e.preventDefault();
+                // Focus the first chat link if available
+                const firstChat = document.querySelector(
+                  'ul.space-y-1 > li:first-child a, ul.space-y-1 > li:first-child [tabindex="0"]'
+                ) as HTMLElement | null;
+                if (firstChat) {
+                  firstChat.focus();
+                }
+              }
+            }}
           />
           <div className="bg-zinc-800 px-2 py-1 rounded-r-md ring ring-zinc-800">
             <span className="text-zinc-400">/</span>
@@ -208,31 +220,39 @@ export const Sidebar = () => {
               </p>
             </div>
           ) : (
-            <ul>
-              {results?.map((chat) => (
-                <li key={chat.id} tabIndex={-1}>
-                  <Link
-                    to={`/?id=${chat.id}`}
-                    tabIndex={0}
-                    className={clsx(
-                      "overflow-hidden px-3 py-2 my-2 mx-0.5 rounded border border-zinc-800 focus:outline-none block bg-gradient-to-br from-zinc-900/30 to-zinc-900/60 hover:from-zinc-900/40 hover:to-zinc-900/80 focus:from-zinc-900/40 focus:to-zinc-900/80 focus:ring-1 focus:ring-zinc-700 transition-all duration-200 relative"
-                      // chat.isPinned && "shadow-inner shadow-amber-900/30"
-                    )}
-                  >
-                    <p className="text-sm font-medium text-zinc-300 truncate">
-                      {chat.title +
-                        (import.meta.env.DEV
-                          ? " - " + chat.id.slice(0, 5)
-                          : "")}
-                      <span className="absolute right-2 top-1/2 -translate-y-1/2">
-                        {chat.isPinned ? (
-                          <PinIcon className="w-4 h-4 text-amber-500" />
-                        ) : null}
-                      </span>
-                    </p>
-                  </Link>
-                </li>
-              ))}
+            <ul className="space-y-1">
+              {results?.map((chat) => {
+                // Determine if this chat is currently open by comparing pathnames and search params
+                const isActive =
+                  typeof window !== "undefined" &&
+                  window.location.search.includes(`id=${chat.id}`);
+                return (
+                  <li key={chat.id} tabIndex={-1}>
+                    <Link
+                      to={`/?id=${chat.id}`}
+                      tabIndex={0}
+                      className={clsx(
+                        "px-3 py-1 focus:outline-none rounded-md rounded-l-none relative flex items-center gap-2",
+                        isActive
+                          ? "border-l-4 border-l-amber-500 bg-zinc-800 shadow-inner shadow-amber-900/10"
+                          : "focus:bg-zinc-800 border-l-amber-500 hover:bg-zinc-900 text-zinc-300"
+                      )}
+                    >
+                      <p className="text-sm font-medium truncate w-full">
+                        {chat.title +
+                          (import.meta.env.DEV
+                            ? " - " + chat.id.slice(0, 5)
+                            : "")}
+                        <span className="absolute right-2 top-1/2 -translate-y-1/2">
+                          {chat.isPinned ? (
+                            <PinIcon className="w-4 h-4 text-amber-500" />
+                          ) : null}
+                        </span>
+                      </p>
+                    </Link>
+                  </li>
+                );
+              })}
             </ul>
           )}
         </div>

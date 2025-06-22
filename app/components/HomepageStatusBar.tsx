@@ -23,6 +23,7 @@ function Separator() {
 export default function HomepageStatusBar() {
   const navigate = useNavigate();
   const [cmdkOpen, setCmdkOpen] = useState(false); // Command menu state
+  const [showTrashedDialog, setShowTrashedDialog] = useState(false);
   const allChatsCount = useLiveQuery(() => db.chats.count()) || 0;
   const pinnedChatsCount =
     useLiveQuery(() => db.chats.where("isPinned").equals(1).count()) || 0;
@@ -30,6 +31,8 @@ export default function HomepageStatusBar() {
     useLiveQuery(() => db.chats.where("inTrash").equals(1).count()) || 0;
   const chatsWithNotes =
     useLiveQuery(() => db.chats.where("notes").notEqual("").toArray()) || [];
+  const trashedChats =
+    useLiveQuery(() => db.chats.where("inTrash").equals(1).toArray()) || [];
 
   // Sync status state
   const [syncStatus, setSyncStatus] = useState<"SYNCING" | "SYNCED" | "ERROR">(
@@ -154,10 +157,14 @@ export default function HomepageStatusBar() {
         {trashedChatsCount > 0 && (
           <>
             <Separator />
-            <span className="uppercase text-red-500" title="Trashed chats">
+            <button
+              className="uppercase text-red-500 flex items-center hover:text-zinc-300"
+              title="Trashed chats"
+              onClick={() => setShowTrashedDialog(true)}
+            >
               <Trash2 size={16} className="inline mr-1" />
               {trashedChatsCount} Trashed
-            </span>
+            </button>
           </>
         )}
       </div>
@@ -199,7 +206,7 @@ export default function HomepageStatusBar() {
             title="All Chat Notes"
             description="Click on a note to go to that chat"
           >
-            <div className="max-h-[400px] overflow-y-auto space-y-4">
+            <div className="max-h-[400px] overflow-y-auto">
               {chatsWithNotes.length > 0 ? (
                 chatsWithNotes.map((chat) => (
                   <div
@@ -215,7 +222,6 @@ export default function HomepageStatusBar() {
                     onKeyDown={(e) => {
                       if (e.key === "Enter" || e.key === " ") {
                         navigate(`/?id=${chat.id}`);
-                        document.body.click();
                       }
                     }}
                   >
@@ -278,6 +284,54 @@ export default function HomepageStatusBar() {
         showNotesSidebar={false}
         setShowNotesSidebar={() => {}}
       />
+
+      {/* Trashed Chats Dialog */}
+      <Dialog open={showTrashedDialog} onOpenChange={setShowTrashedDialog}>
+        <DialogContent
+          title="Trashed Chats"
+          description="Click a chat to restore it from trash."
+        >
+          <div>
+            {trashedChats.length > 0 ? (
+              trashedChats.map((chat) => (
+                <div
+                  key={chat.id}
+                  className="bg-zinc-950 px-3 py-1 rounded cursor-pointer hover:bg-zinc-900 transition-colors relative"
+                  onClick={async () => {
+                    await db.chats.update(chat.id, { inTrash: 0 });
+                    toast.success(`Restored chat: ${chat.title}`);
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      await db.chats.update(chat.id, { inTrash: 0 });
+                      toast.success(`Restored chat: ${chat.title}`);
+                    }
+                  }}
+                >
+                  <div className="text-zinc-300 font-medium mb-1 truncate text-sm flex items-center justify-between">
+                    {chat.title}
+                    <div>
+                      <span className="text-xs text-zinc-500 mr-2">
+                        {new Date(chat.createdAt).toLocaleDateString()}
+                      </span>
+                      <span className="text-xs text-zinc-500">
+                        Click to restore
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="text-center py-6 text-zinc-400">
+                <Trash2 className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                <p>No trashed chats</p>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

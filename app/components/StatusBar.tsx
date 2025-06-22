@@ -9,6 +9,7 @@ import {
   Tag,
   Share2,
   Command as CommandIcon,
+  Pin,
 } from "lucide-react";
 import { db } from "~/localdb";
 import toast from "react-hot-toast";
@@ -627,27 +628,27 @@ function StatusBar() {
               </button>
               <Separator />
 
-              {/* Tag Button */}
+              {/* Pin Button */}
               <button
                 type="button"
-                title={`${showNotesSidebar ? "Close" : "Show"} Tags (Alt+T)`}
-                aria-label={`${showNotesSidebar ? "Close" : "Show"} tags`}
-                onClick={() => {
-                  if (!showNotesSidebar) {
-                    openNotesSidebarAndFocusTags();
-                  } else {
-                    setShowNotesSidebar(false);
-                  }
+                title={chat.isPinned ? "Unpin Chat" : "Pin Chat"}
+                aria-label={chat.isPinned ? "Unpin chat" : "Pin chat"}
+                onClick={async () => {
+                  await db.chats.update(chat.id, {
+                    isPinned: chat.isPinned ? 0 : 1,
+                    updatedAt: new Date(),
+                  });
+                  toast.success(
+                    chat.isPinned ? "Unpinned chat" : "Pinned chat"
+                  );
                 }}
               >
-                <Tag
+                <Pin
                   size={28}
-                  className={`inline-block hover:text-blue-400 hover:bg-zinc-800 ${
-                    chat?.tags?.length > 0
-                      ? "text-blue-400 hover:!text-blue-400"
-                      : ""
-                  } ${
-                    showNotesSidebar ? "text-blue-400 hover:!text-blue-400" : ""
+                  className={`inline-block transition-colors duration-150 hover:text-amber-400 hover:bg-zinc-800 ${
+                    chat.isPinned
+                      ? "text-amber-400 hover:!text-amber-400"
+                      : "text-zinc-400"
                   }`}
                 />
               </button>
