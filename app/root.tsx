@@ -37,6 +37,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
       <head>
         <meta charSet="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
+        {process.env.NODE_ENV == "production" && (
+          <script
+            defer
+            src="https://stats.lalit.sh/script.js"
+            data-website-id="5c0a57ac-1b8c-4f22-bb36-ff80156623f8"
+          ></script>
+        )}
         <Meta />
         <Links />
       </head>

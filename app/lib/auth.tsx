@@ -72,17 +72,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const login = async ({ email, password }: LoginInput) => {
     try {
       const res = await api.post("/login", { email, password });
-      toast.success(res.data.message || "Logged in");
+      toast.success(res.data.message || "Logged in successfully");
       // Update user state with the user data from the response
       setUser(res.data.user);
       updateToken(res.data.token); // Store token in memory and tokenStore
       navigate("/");
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(error.response?.data?.error || "Login failed");
+        const error = err as {
+          response?: { status?: number; data?: { error?: string } };
+        };
+
+        // Different error messages based on HTTP status code
+        if (error.response?.status === 401) {
+          toast.error("Invalid email or password");
+        } else if (error.response?.status === 404) {
+          toast.error("Account not found");
+        } else if (error.response?.status === 429) {
+          toast.error("Too many login attempts. Please try again later.");
+        } else {
+          toast.error(error.response?.data?.error || "Login failed");
+        }
       } else {
-        toast.error("Login failed");
+        toast.error("Login failed. Please check your internet connection.");
       }
       throw err;
     }
@@ -91,17 +103,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const signup = async ({ email, password, name }: SignupInput) => {
     try {
       const res = await api.post("/signup", { email, password, name });
-      toast.success(res.data.message || "Account created");
+      toast.success(res.data.message || "Account created successfully");
       // Update user state with the user data from the response
       setUser(res.data.user);
       updateToken(res.data.token); // Store token in memory and tokenStore
       navigate("/");
     } catch (err: unknown) {
       if (err && typeof err === "object" && "response" in err) {
-        const error = err as { response?: { data?: { error?: string } } };
-        toast.error(error.response?.data?.error || "Signup failed");
+        const error = err as {
+          response?: { status?: number; data?: { error?: string } };
+        };
+
+        // Different error messages based on HTTP status code or specific error messages
+        if (error.response?.status === 409) {
+          toast.error("This email address is already registered");
+        } else if (error.response?.status === 400) {
+          const errorMsg = error.response?.data?.error || "";
+
+          if (errorMsg.includes("Password must be at least")) {
+            toast.error("Password must be at least 6 characters long");
+          } else if (
+            errorMsg.includes("Email, password, and name are required")
+          ) {
+            toast.error("All fields are required to create an account");
+          } else {
+            toast.error(errorMsg || "Invalid signup details");
+          }
+        } else {
+          toast.error(error.response?.data?.error || "Signup failed");
+        }
       } else {
-        toast.error("Signup failed");
+        toast.error("Signup failed. Please check your internet connection.");
       }
       throw err;
     }

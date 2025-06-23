@@ -46,13 +46,22 @@ const authMiddleware = async (c: Context, next: Next) => {
     c.req.header("Authorization")?.replace("Bearer ", "") ||
     c.req.header("token")) as string;
 
-  if (!token) return c.json({ error: "Unauthorized!!" }, 401);
+  if (!token) {
+    return c.json(
+      {
+        error: "Authentication required. Please log in.",
+        code: "NO_TOKEN",
+      },
+      401
+    );
+  }
 
   try {
     const decoded = (await verify(
       token,
       c.get("JWT_SECRET")
     )) as unknown as UserDataInToken;
+
     // Set the user in context with all the decoded data
     c.set("user", decoded);
     await next();
@@ -64,7 +73,35 @@ const authMiddleware = async (c: Context, next: Next) => {
       tokenHeader: c.req.header("token"),
       authHeader: c.req.header("Authorization"),
     });
-    return c.json({ error: "Invalid jwt token!!" }, 401);
+
+    // Provide more specific error based on what went wrong
+    if (err instanceof Error) {
+      if (err.message.includes("expired")) {
+        return c.json(
+          {
+            error: "Your session has expired. Please log in again.",
+            code: "TOKEN_EXPIRED",
+          },
+          401
+        );
+      } else if (err.message.includes("invalid")) {
+        return c.json(
+          {
+            error: "Invalid authentication token. Please log in again.",
+            code: "TOKEN_INVALID",
+          },
+          401
+        );
+      }
+    }
+
+    return c.json(
+      {
+        error: "Authentication failed. Please log in again.",
+        code: "AUTH_FAILED",
+      },
+      401
+    );
   }
 };
 
@@ -77,102 +114,149 @@ app.use("*", async (c, next) => {
 });
 
 app.post("/signup", async (c) => {
-  const { email, password, name } = await c.req.json();
-  const salt = genSaltSync(10);
-  const passwordHash = hashSync(password, salt);
-  const result = await c.var.db
-    .insert(schema.users)
-    .values({
-      email,
-      name,
-      passwordHash,
-    })
-    .returning();
-  if (!result) {
-    return c.json({ error: "Failed to create user" }, 500);
+  try {
+    const { email, password, name } = await c.req.json();
+
+    // Input validation
+    if (!email || !password || !name) {
+      return c.json({ error: "Email, password, and name are required" }, 400);
+    }
+
+    if (password.length < 6) {
+      return c.json(
+        { error: "Password must be at least 6 characters long" },
+        400
+      );
+    }
+
+    // Check if user with this email already exists
+    const existingUsers = await c.var.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1);
+
+    if (existingUsers.length > 0) {
+      return c.json({ error: "A user with this email already exists" }, 409);
+    }
+
+    const salt = genSaltSync(10);
+    const passwordHash = hashSync(password, salt);
+    const result = await c.var.db
+      .insert(schema.users)
+      .values({
+        email,
+        name,
+        passwordHash,
+      })
+      .returning();
+    if (!result || result.length === 0) {
+      return c.json({ error: "Failed to create user" }, 500);
+    }
+
+    const user = result[0];
+    // Create token for the new user
+    const token = await sign(
+      {
+        email: user.email,
+        userId: user.userId,
+        name: user.name,
+      },
+      c.var.JWT_SECRET,
+      "HS256"
+    );
+
+    // Set HttpOnly Secure Cookie
+    setCookie(c, "token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 31536000,
+    });
+
+    // Return user data without sensitive information
+    const { passwordHash: _, ...userData } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    void _; // Prevent unused variable warning
+
+    return c.json({
+      message: "User created and logged in",
+      token: token, // Explicitly return token in the response for in-memory storage
+      user: userData,
+    });
+  } catch (error) {
+    console.error("Signup error:", error);
+    return c.json(
+      {
+        error: "An unexpected error occurred during signup. Please try again.",
+      },
+      500
+    );
   }
-
-  const user = result[0];
-  // Create token for the new user
-  const token = await sign(
-    {
-      email: user.email,
-      userId: user.userId,
-      name: user.name,
-    },
-    c.var.JWT_SECRET,
-    "HS256"
-  );
-
-  // Set HttpOnly Secure Cookie
-  // c.header(
-  //   "Set-Cookie",
-  //   `token=${token}; HttpOnly; Secure; SameSite=None;`
-  // );
-  setCookie(c, "token", token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    maxAge: 31536000,
-  });
-
-  // Return user data without sensitive information
-  const { passwordHash: _, ...userData } = user; // Use _ to indicate unused variable
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  void _; // Prevent unused variable warning
-
-  return c.json({
-    message: "User created and logged in",
-    token: token, // Explicitly return token in the response for in-memory storage
-    user: userData,
-  });
 });
 
 app.post("/login", async (c) => {
-  const { email, password } = await c.req.json();
-  const users = await c.var.db
-    .select()
-    .from(schema.users)
-    .where(eq(schema.users.email, email))
-    .limit(1);
-  if (!users[0]) {
-    return c.json({ error: "User not found" }, 404);
+  try {
+    const { email, password } = await c.req.json();
+
+    // Input validation
+    if (!email || !password) {
+      return c.json({ error: "Email and password are required" }, 400);
+    }
+
+    const users = await c.var.db
+      .select()
+      .from(schema.users)
+      .where(eq(schema.users.email, email))
+      .limit(1);
+
+    if (!users[0]) {
+      // For security, use a generic message rather than specifically saying the user doesn't exist
+      return c.json({ error: "Invalid email or password" }, 401);
+    }
+
+    const user = users[0];
+    if (!compareSync(password, user.passwordHash)) {
+      return c.json({ error: "Invalid email or password" }, 401);
+    }
+
+    const token = await sign(
+      {
+        email: user.email,
+        userId: user.userId,
+        name: user.name,
+      },
+      c.get("JWT_SECRET"),
+      "HS256"
+    );
+
+    // Set HttpOnly Secure Cookie
+    setCookie(c, "token", token, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      maxAge: 31536000,
+    });
+
+    // Return user data without sensitive information
+    const { passwordHash: _, ...userData } = user;
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    void _; // Prevent unused variable warning
+
+    return c.json({
+      message: "Logged in successfully",
+      token: token,
+      user: userData,
+    });
+  } catch (error) {
+    console.error("Login error:", error);
+    return c.json(
+      {
+        error: "An unexpected error occurred during login. Please try again.",
+      },
+      500
+    );
   }
-  // console.log({ users });
-  const user = users[0];
-  if (!user || !compareSync(password, user.passwordHash)) {
-    return c.json({ error: "Invalid credentials" }, 401);
-  }
-
-  const token = await sign(
-    {
-      email: user.email,
-      userId: user.userId,
-      name: user.name,
-    },
-    c.get("JWT_SECRET"),
-    "HS256"
-  );
-
-  // Set HttpOnly Secure Cookie
-  // c.header("Set-Cookie", `token=${token}; HttpOnly; Secure; SameSite=None;`);
-  setCookie(c, "token", token, {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    maxAge: 31536000,
-  });
-
-  // Return user data without sensitive information
-  const { passwordHash: _, ...userData } = user; // Use _ to indicate unused variable
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  void _; // Prevent unused variable warning
-
-  return c.json({
-    message: "Logged in",
-    token: token, // Explicitly return token in the response for in-memory storage
-    user: userData,
-  });
 });
 
 app.post("/logout", async (c) => {

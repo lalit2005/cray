@@ -8,13 +8,46 @@ import toast from "react-hot-toast";
 import { useNavigate } from "@remix-run/react";
 import { useAuth } from "~/lib/auth";
 
+// LocalStorage keys for model selection
+const MODEL_PROVIDER_KEY = "cray-model-provider";
+const MODEL_NAME_KEY = "cray-model-name";
+
 export function useChatInteraction(chatId: string | null, messages: Message[]) {
   const navigate = useNavigate();
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const [currentProvider, setCurrentProvider] = useState<LLMProvider>("google");
-  const [currentModel, setCurrentModel] = useState<string>(
-    "gemini-2.5-flash-preview-04-17"
-  );
+
+  // Initialize with values from localStorage or defaults
+  const [currentProvider, setCurrentProvider] = useState<LLMProvider>(() => {
+    const savedProvider =
+      typeof window !== "undefined"
+        ? (localStorage.getItem(MODEL_PROVIDER_KEY) as LLMProvider)
+        : null;
+    return savedProvider || "google";
+  });
+
+  const [currentModel, setCurrentModel] = useState<string>(() => {
+    const savedModel =
+      typeof window !== "undefined"
+        ? localStorage.getItem(MODEL_NAME_KEY)
+        : null;
+    return savedModel || "gemini-2.5-flash-preview-04-17";
+  });
+
+  // Custom setters to persist to localStorage
+  const setPersistedProvider = (provider: LLMProvider) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(MODEL_PROVIDER_KEY, provider);
+    }
+    setCurrentProvider(provider);
+  };
+
+  const setPersistedModel = (model: string) => {
+    if (typeof window !== "undefined") {
+      localStorage.setItem(MODEL_NAME_KEY, model);
+    }
+    setCurrentModel(model);
+  };
+
   const { token } = useAuth();
 
   // Keep track of the assistant message ID that's currently being updated
@@ -464,9 +497,9 @@ export function useChatInteraction(chatId: string | null, messages: Message[]) {
     chatError,
     status,
     currentProvider,
-    setCurrentProvider,
+    setCurrentProvider: setPersistedProvider,
     currentModel,
-    setCurrentModel,
+    setCurrentModel: setPersistedModel,
     inputRef,
   };
 }

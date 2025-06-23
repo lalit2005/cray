@@ -2,7 +2,7 @@
 import { Context } from "hono";
 import { streamText } from "ai";
 import { stream } from "hono/streaming";
-import { getModel, Providers, ChatRequest } from "../models";
+import { getModel, Providers, ChatRequest } from "../lib/models";
 
 export default async function (c: Context) {
   try {
@@ -156,9 +156,9 @@ export default async function (c: Context) {
       const result = await streamText({
         model: modelInstance,
         messages: processedMessages,
-        onFinish: (msg) => {
-          console.log("Message received:", msg);
-        },
+        // onFinish: (msg) => {
+        // console.log("Message received:", msg);
+        // },
         onError: (error) => {
           console.error("Error streaming text:", error);
         },
@@ -230,9 +230,9 @@ export default async function (c: Context) {
           const fallbackResult = await streamText({
             model: fallbackModel,
             messages: fallbackMessages,
-            onFinish: (msg) => {
-              console.log("Fallback message received:", msg);
-            },
+            // onFinish: (msg) => {
+            // console.log("Fallback message received:", msg);
+            // },
             onError: (fallbackError) => {
               console.error("Fallback also failed:", fallbackError);
             },
