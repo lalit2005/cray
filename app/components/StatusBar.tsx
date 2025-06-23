@@ -70,7 +70,11 @@ function StatusBar() {
       }
 
       // Support both Alt+N (Windows/Linux) and Option+N (Mac)
-      if (e.altKey && e.key.toLowerCase() === "n") {
+      // On Mac, Option+N can produce different characters depending on keyboard layout
+      if (
+        (e.altKey && e.key.toLowerCase() === "n") ||
+        (navigator.platform.includes("Mac") && e.altKey)
+      ) {
         e.preventDefault();
 
         // If we're about to close the sidebar, ensure notes are saved first
@@ -656,7 +660,9 @@ function StatusBar() {
               {/* Notes Button for sidebar toggle - now includes tags management */}
               <button
                 type="button"
-                title={`${showNotesSidebar ? "Close" : "Show"} Notes (Alt+N)`}
+                title={`${showNotesSidebar ? "Close" : "Show"} Notes (${
+                  navigator.platform.includes("Mac") ? "Option+N" : "Alt+N"
+                })`}
                 aria-label={`${showNotesSidebar ? "Close" : "Show"} notes`}
                 onClick={() => {
                   if (!showNotesSidebar) {
