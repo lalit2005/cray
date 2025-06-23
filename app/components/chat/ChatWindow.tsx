@@ -1,4 +1,4 @@
-import React, { useRef } from "react";
+import React, { useRef, memo } from "react";
 import { useSearchParams, useNavigate, useLocation } from "@remix-run/react";
 import { useChatMessages } from "./useChatMessages";
 import { useChatInteraction } from "./useChatInteraction";
@@ -7,7 +7,7 @@ import { EmptyState } from "./EmptyState";
 import { MessageList } from "./MessageList";
 import { ChatInput } from "./ChatInput";
 
-export const ChatWindow: React.FC = () => {
+export const ChatWindow = memo(function ChatWindow() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const location = useLocation();
@@ -83,4 +83,4 @@ export const ChatWindow: React.FC = () => {
       />
     </div>
   );
-};
+});

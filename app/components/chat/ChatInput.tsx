@@ -1,4 +1,4 @@
-import React from "react";
+import React, { memo, useCallback } from "react";
 import { ModelSelector } from "./ModelSelector";
 import { ChatErrorDisplay } from "./ChatErrorDisplay";
 import { LLMProvider } from "./types";
@@ -18,7 +18,69 @@ interface ChatInputProps {
   messagesLength: number;
 }
 
-export const ChatInput: React.FC<ChatInputProps> = ({
+// Create a memoized textarea component to prevent unnecessary re-renders
+interface MemoizedTextAreaProps {
+  inputRef: React.RefObject<HTMLTextAreaElement>;
+  input: string;
+  handleInputChange: (e: React.ChangeEvent<HTMLTextAreaElement>) => void;
+  handleSendMessage: () => void;
+  status: string;
+  messagesLength: number;
+}
+
+const MemoizedTextArea = memo(function MemoizedTextArea({
+  inputRef,
+  input,
+  handleInputChange,
+  handleSendMessage,
+  status,
+  messagesLength,
+}: MemoizedTextAreaProps) {
+  // Memoize the keydown handler with high priority
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        if (status !== "streaming") {
+          handleSendMessage();
+        }
+      }
+    },
+    [status, handleSendMessage]
+  );
+
+  // OPTIMIZATION: Use onInput for immediate feedback in addition to onChange
+  const handleInput = useCallback(() => {
+    // Mark as typing in global state to prevent virtualization interference
+    try {
+      // @ts-expect-error - Setting custom property
+      window.__crayIsTyping.current = true;
+    } catch (err) {
+      // Fail silently if property doesn't exist
+    }
+  }, []);
+
+  return (
+    <textarea
+      ref={inputRef}
+      className="w-full p-4 pr-20 rounded-t-xl resize-none focus:outline-none border-2 border-zinc-800/50 border-b-0 inset-shadow"
+      placeholder={
+        messagesLength === 0 ? "Start a conversation" : "Type your message..."
+      }
+      rows={4}
+      value={input}
+      onChange={handleInputChange}
+      onInput={handleInput}
+      onKeyDown={handleKeyDown}
+      disabled={status === "streaming"}
+    />
+  );
+});
+
+MemoizedTextArea.displayName = "MemoizedTextArea";
+
+// Optimize the main component with memo
+export const ChatInput = memo(function ChatInput({
   inputRef,
   input,
   handleInputChange,
@@ -30,7 +92,7 @@ export const ChatInput: React.FC<ChatInputProps> = ({
   setCurrentProvider,
   setCurrentModel,
   messagesLength,
-}) => {
+}: ChatInputProps) {
   return (
     <div className="bg-transparent fixed bottom-0 left-[20vw] right-0 p-4 pb-12 sidebar-offset">
       <div
@@ -45,26 +107,13 @@ export const ChatInput: React.FC<ChatInputProps> = ({
 
         <div className="flex items-end shadow-xl shadow-black/20 mx-auto">
           <div className="flex-1 relative shadow-2xl shadow-black">
-            <textarea
-              ref={inputRef}
-              className="w-full p-4 pr-20 rounded-t-xl resize-none focus:outline-none border-2 border-zinc-800/50 border-b-0 inset-shadow"
-              placeholder={
-                messagesLength === 0
-                  ? "Start a conversation"
-                  : "Type your message..."
-              }
-              rows={4}
-              value={input}
-              onChange={handleInputChange}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && !e.shiftKey) {
-                  e.preventDefault();
-                  if (status !== "streaming") {
-                    handleSendMessage();
-                  }
-                }
-              }}
-              disabled={status === "streaming"}
+            <MemoizedTextArea
+              inputRef={inputRef}
+              input={input}
+              handleInputChange={handleInputChange}
+              handleSendMessage={handleSendMessage}
+              status={status}
+              messagesLength={messagesLength}
             />
           </div>
         </div>
@@ -82,4 +131,4 @@ export const ChatInput: React.FC<ChatInputProps> = ({
       </div>
     </div>
   );
-};
+});

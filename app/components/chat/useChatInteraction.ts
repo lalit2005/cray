@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { getApiKey } from "~/lib/apiKeys";
 import { db } from "~/localdb";
@@ -410,9 +410,56 @@ export function useChatInteraction(chatId: string | null, messages: Message[]) {
     };
   }, []);
 
+  // Store a global reference to track typing state that can be accessed by other hooks
+  const isTypingRef = useRef(false);
+
+  // We'll use a separate ref to store the timeout ID to avoid TypeScript errors
+  const typingTimeoutRef = useRef<number | null>(null);
+
+  // Make the isTypingRef available on the window for access by useChatMessages
+  useEffect(() => {
+    // Make the typing state available globally using a cleanly typed approach
+    Object.defineProperty(window, "__crayIsTyping", {
+      value: isTypingRef,
+      writable: true,
+      configurable: true,
+    });
+
+    return () => {
+      if ("__crayIsTyping" in window) {
+        Object.defineProperty(window, "__crayIsTyping", {
+          value: undefined,
+          writable: true,
+          configurable: true,
+        });
+      }
+    };
+  }, []);
+  // Simplified input handler to track typing state and ensure responsive input
+  const optimizedHandleInputChange = useCallback(
+    (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+      // Set typing flag before processing input
+      isTypingRef.current = true;
+
+      // Process input change
+      handleInputChange(e);
+
+      // Reset typing flag after a short delay
+      if (typingTimeoutRef.current !== null) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+
+      typingTimeoutRef.current = window.setTimeout(() => {
+        isTypingRef.current = false;
+        typingTimeoutRef.current = null;
+      }, 500);
+    },
+    [handleInputChange]
+  );
+
   return {
     input,
-    handleInputChange,
+    handleInputChange: optimizedHandleInputChange,
     handleSendMessage,
     chatError,
     status,

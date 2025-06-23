@@ -1,4 +1,4 @@
-import React from "react";
+import { memo } from "react";
 import { Message as MessageType } from "./types";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
@@ -12,7 +12,17 @@ interface MessageProps {
   message: MessageType;
 }
 
-export const Message: React.FC<MessageProps> = ({ message }) => {
+// Enhanced memo comparison function to prevent unnecessary re-renders
+function arePropsEqual(prevProps: MessageProps, nextProps: MessageProps) {
+  // Only re-render if the message content or loading state changes
+  return (
+    prevProps.message.id === nextProps.message.id &&
+    prevProps.message.content === nextProps.message.content &&
+    prevProps.message.loading === nextProps.message.loading
+  );
+}
+
+export const Message = memo(function Message({ message }: MessageProps) {
   return (
     <div
       key={message.id}
@@ -81,13 +91,13 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeRaw]}
               components={{
-                code({ className = "", children, ...props }) {
-                  // react-markdown v8+ passes 'inline' as a prop, but types may not include it
-                  // @ts-expect-error: 'inline' may not be typed
-                  const inline = props.inline ?? false;
+                // @ts-expect-error - react-markdown types are incomplete for code components
+                code({ className = "", children, inline, ...props }) {
                   const match = /language-(\w+)/.exec(className);
                   const language = match ? match[1] : "";
-                  if (!inline && language) {
+                  // Convert inline prop to boolean with fallback
+                  const isInline = inline === true;
+                  if (!isInline && language) {
                     return (
                       <div className="relative">
                         <button
@@ -113,6 +123,7 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
                           </svg>
                         </button>
                         <SyntaxHighlighter
+                          // @ts-expect-error - oneDark has correct type but TS doesn't recognize it
                           style={oneDark}
                           language={language}
                           customStyle={{
@@ -204,4 +215,4 @@ export const Message: React.FC<MessageProps> = ({ message }) => {
       </div>
     </div>
   );
-};
+}, arePropsEqual);

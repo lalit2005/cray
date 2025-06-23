@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useCallback } from "react";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "~/localdb";
 import { Message } from "./types";
@@ -15,16 +15,50 @@ export function useChatMessages(chatId: string | null) {
   ) as Message[];
 
   const isLoading = messages === undefined;
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null); // Simple reference to track message count for scroll optimization
+  const lastMessageCountRef = useRef<number>(0);
 
-  // Scroll to bottom when messages change
-  const scrollToBottom = () => {
+  // Simplified scroll to bottom that skips during typing
+  const scrollToBottom = useCallback(() => {
+    // Skip scrolling during typing to prevent layout thrashing
+    try {
+      // @ts-expect-error - Accessing custom property from window
+      const isTyping = window.__crayIsTyping?.current === true;
+      if (isTyping) {
+        return; // Don't scroll while typing
+      }
+    } catch (e) {
+      // Continue if property access fails
+    }
+
+    // Perform smooth scroll
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  }, []);
 
+  // Simplified scroll logic to prevent scrolling during typing
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    // Skip this effect if we don't have any messages yet
+    if (!messages.length) return;
+
+    // Check if a new message was added
+    const newMessageAdded = messages.length > lastMessageCountRef.current;
+
+    // Check if this is an assistant message or a loading message
+    const hasNewAssistantMessage =
+      messages.length > 0 &&
+      messages[messages.length - 1]?.role === "assistant";
+
+    const isLoading = messages.some((m) => m.loading);
+
+    // Determine if we need to scroll
+    if (newMessageAdded || hasNewAssistantMessage || isLoading) {
+      // Just call our simplified scrollToBottom which already checks for typing
+      scrollToBottom();
+    }
+
+    // Always update our reference count
+    lastMessageCountRef.current = messages.length;
+  }, [messages, scrollToBottom]);
 
   // Check for and clean up any stale loading messages when mounting or switching chats
   useEffect(() => {

@@ -128,17 +128,23 @@ export const Sidebar = () => {
         (
           listItems[currentIndex + 1].querySelector("a") as HTMLElement
         )?.focus();
-      } else if (e.key === "ArrowUp" && currentIndex > 0) {
+      } else if (e.key === "ArrowUp") {
         e.preventDefault();
-        (
-          listItems[currentIndex - 1].querySelector("a") as HTMLElement
-        )?.focus();
+        if (currentIndex === 0) {
+          // If on the first item, focus the search input
+          inputRef.current?.focus();
+        } else if (currentIndex > 0) {
+          // Otherwise move to the previous item
+          (
+            listItems[currentIndex - 1].querySelector("a") as HTMLElement
+          )?.focus();
+        }
       }
     };
 
     document.addEventListener("keydown", handleKeydown);
     return () => document.removeEventListener("keydown", handleKeydown);
-  }, []);
+  }, [inputRef]);
 
   const chats = useLiveQuery(() =>
     db.chats
@@ -283,10 +289,14 @@ export const Sidebar = () => {
               if (e.key === "ArrowDown") {
                 e.preventDefault();
                 // Get the first group
-                const firstChatGroup = document.querySelector(".sidebar ul.space-y-1");
+                const firstChatGroup = document.querySelector(
+                  ".sidebar ul.space-y-1"
+                );
                 if (firstChatGroup) {
                   // Find the first link in the first group
-                  const firstChat = firstChatGroup.querySelector("li a") as HTMLElement;
+                  const firstChat = firstChatGroup.querySelector(
+                    "li a"
+                  ) as HTMLElement;
                   if (firstChat) {
                     // Focus it and stop propagation
                     setTimeout(() => firstChat.focus(), 0);
