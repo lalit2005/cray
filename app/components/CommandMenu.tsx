@@ -201,6 +201,72 @@ export function CommandMenu({
     }
   };
 
+  // Function to copy all chat data with roles
+  const copyAllChatData = async () => {
+    if (!chatId) return;
+
+    try {
+      toast.loading("Preparing chat data...");
+
+      // Get all messages for the current chat
+      const messages = await db.messages
+        .where("chatId")
+        .equals(chatId)
+        .sortBy("createdAt");
+
+      if (!messages || messages.length === 0) {
+        toast.dismiss();
+        toast.error("No messages found in this chat");
+        return;
+      }
+
+      // Format the messages with their roles in a way that's compatible with other AI apps
+      const formattedMessages = messages
+        .map((message) => {
+          // Make role names consistent with what other AI apps expect
+          const role =
+            message.role === "assistant"
+              ? "Assistant"
+              : message.role === "user"
+              ? "User"
+              : message.role === "system"
+              ? "System"
+              : message.role;
+
+          // Add a nice separator between messages
+          return `### ${role}:\n${message.content}`;
+        })
+        .join("\n\n");
+
+      // Add chat title and metadata
+      let chatData = "";
+      if (chat) {
+        chatData = `# ${chat.title}\n`;
+        chatData += `Date: ${new Date(chat.updatedAt).toLocaleString()}\n`;
+        chatData += `Model: ${messages[0]?.model || "Unknown"}\n`;
+        chatData += `Provider: ${messages[0]?.provider || "Unknown"}\n\n`;
+        chatData += `----------------------------------------\n\n`;
+      }
+
+      chatData += formattedMessages;
+
+      // Add footer with source info
+      chatData += "\n\n----------------------------------------\n";
+      chatData += "Exported from Cray Chat";
+
+      // Copy to clipboard
+      await navigator.clipboard.writeText(chatData);
+
+      toast.dismiss();
+      toast.success("Chat data copied to clipboard");
+      onOpenChange(false);
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Failed to copy chat data");
+      console.error(error);
+    }
+  };
+
   // Helper function to check if an action matches the search query
   const actionMatchesSearch = (actionName: string) => {
     if (!search) return true;
@@ -395,6 +461,16 @@ export function CommandMenu({
                     </Command.Item>
                   )
                 : null}
+
+              {actionMatchesSearch("Copy Chat Data") && (
+                <Command.Item
+                  onSelect={copyAllChatData}
+                  className="flex items-center px-4 py-2 text-zinc-300 hover:bg-zinc-800 cursor-pointer rounded-md transition-colors"
+                >
+                  <MessageCircle className="w-4 h-4 mr-2" />
+                  Copy Chat Data
+                </Command.Item>
+              )}
 
               {actionMatchesSearch("Delete Chat") && (
                 <Command.Item
