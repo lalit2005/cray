@@ -85,7 +85,7 @@ export const SUPPORTED_MODELS: Record<Providers, string[]> = {
     "x-ai/grok-3-mini-beta",
     "deepseek/deepseek-r1-0528:free",
     "deepseek/deepseek-chat-v3-0324:free",
-    "meta-llama/llama-3.3-8b-instruct:free",
+    "meta-llama/llama-3.3-70b-instruct:free",
   ],
   groq: [
     "deepseek-r1-distill-llama-70b",

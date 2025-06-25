@@ -13,6 +13,7 @@ here are some of the key features:
 - **multi-provider support**: cray supports multiple ai providers, allowing you to choose the one that best suits your needs.
 - **privacy-focused**: cray does not collect or store your personal data, ensuring your conversations remain private.
 - **open source**: cray is open source, allowing you to inspect the code and contribute to its development.
+- **copy chat**: easily copy your chat conversation data to continue in a different app.
 
 ---
 
