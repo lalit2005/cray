@@ -73,7 +73,7 @@ function StatusBar() {
       // On Mac, Option+N can produce different characters depending on keyboard layout
       if (
         (e.altKey && e.key.toLowerCase() === "n") ||
-        (navigator.platform.includes("Mac") && e.altKey)
+        (navigator.platform.includes("Mac") && e.altKey && e.key.toLowerCase() == "n")
       ) {
         e.preventDefault();
 
