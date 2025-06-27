@@ -67,7 +67,7 @@ export const SUPPORTED_MODELS: Record<Providers, string[]> = {
   ],
   google: [
     "gemini-2.5-flash-preview-04-17",
-    "gemini-2.5-pro-exp-03-25",
+    "gemini-2.5-pro-preview-05-06",
     "gemini-2.0-flash-lite",
   ],
   deepseek: ["deepseek-chat"],
@@ -79,7 +79,7 @@ export const SUPPORTED_MODELS: Record<Providers, string[]> = {
     "openai/gpt-3.5-turbo",
     "anthropic/claude-sonnet-4",
     "anthropic/claude-3.7-sonnet",
-    "google/gemini-2.5-pro-exp-03-25",
+    "google/gemini-2.5-pro",
     "google/gemini-2.0-flash-exp:free",
     "x-ai/grok-3-beta",
     "x-ai/grok-3-mini-beta",
