@@ -32,6 +32,7 @@ app.use(
       "http://localhost:5173",
       "http://localhost:8787",
       "https://cray.lalit.sh",
+      "https://cray.pages.dev",
     ],
     // allow credentials (cookies) to be sent
     credentials: true,
