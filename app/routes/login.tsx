@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link } from "@remix-run/react";
 import { Button } from "~/components/ui/Button";
 import { useAuth } from "~/lib/auth";
+import { EmptyState } from "~/components/chat";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -59,10 +60,11 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex items-center justify-center h-screen">
+    <div className="pt-[20vh]">
+      <EmptyState />
       <form
         onSubmit={handleSubmit}
-        className="w-full max-w-sm space-y-4 bg-zinc-900/50 p-6 rounded-lg border border-zinc-800"
+        className="w-full max-w-sm mt-20 space-y-4 bg-zinc-900/50 p-6 rounded-lg border border-zinc-800 mx-auto"
       >
         <h1 className="text-2xl font-bold text-center text-zinc-100">Login</h1>
 
