@@ -1,5 +1,7 @@
 # cray: a local-first, ai chat app
 
+![Cray](./public/image.png)
+
 cray is an ai chat application designed with a local-first approach, efficiency, offline capability, and sync.
 
 here are some of the key features:
