@@ -10,6 +10,7 @@ here are some of the key features:
 - **efficient**: cray is designed to be fast and keyboard-friendly.
 - **sync**: cray can sync your data across devices, ensuring you have access to your conversations wherever you are.
 - **BYOK**: bring your own key for ai providers and there's no hidden costs or subscriptions.
+- **auto-tagging**: cray automatically tags your conversations, making it easy to find them.
 - **multi-provider support**: cray supports multiple ai providers, allowing you to choose the one that best suits your needs.
 - **privacy-focused**: cray does not collect or store your personal data, ensuring your conversations remain private.
 - **open source**: cray is open source, allowing you to inspect the code and contribute to its development.

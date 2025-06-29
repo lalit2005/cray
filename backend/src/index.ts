@@ -8,6 +8,7 @@ import { genSaltSync, hashSync, compareSync } from "bcrypt-edge";
 import { sync } from "./lib/sync";
 import { SyncRequest, SyncResponse } from "./lib/sync-interface";
 import chat from "./lib/chat";
+import { generateMetadata } from "./lib/metadata";
 
 interface UserDataInToken {
   email: string;
@@ -282,6 +283,25 @@ app.get("/", (c) => {
 app.post("/chat", authMiddleware, async (c) => {
   // return await mockChat(c);
   return await chat(c);
+});
+
+app.post("/metadata", authMiddleware, async (c) => {
+  try {
+    const { message, provider, model, apiKey } = await c.req.json();
+
+    if (!message || !provider || !model || !apiKey) {
+      return c.json(
+        { error: "Missing required fields: message, provider, model, apiKey" },
+        400
+      );
+    }
+
+    const metadata = await generateMetadata(message, provider, model, apiKey);
+    return c.json(metadata);
+  } catch (error) {
+    console.error("Error generating metadata:", error);
+    return c.json({ error: "Failed to generate metadata" }, 500);
+  }
 });
 
 // New endpoint for fetching shared chats (no auth required)

@@ -2,7 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useChat } from "@ai-sdk/react";
 import { getApiKey } from "~/lib/apiKeys";
 import { db } from "~/localdb";
-import { API_BASE_URL } from "~/lib/axios";
+import axios, { API_BASE_URL } from "~/lib/axios";
 import { LLMProvider, Message } from "./types";
 import toast from "react-hot-toast";
 import { useNavigate } from "@remix-run/react";
@@ -237,6 +237,88 @@ export function useChatInteraction(chatId: string | null, messages: Message[]) {
               provider: currentProvider,
               model: currentModel,
             });
+          }
+        }
+
+        // Check if this is the first message of the chat and generate metadata
+        const allMessages = await db.messages
+          .where({ chatId: currentId })
+          .toArray();
+
+        // Count user messages to see if this was the first user message
+        const userMessages = allMessages.filter((m) => m.role === "user");
+
+        if (userMessages.length === 1) {
+          // This was the first user message, generate metadata
+          console.log("First message completed, generating metadata...");
+          try {
+            const firstUserMessage = userMessages[0];
+            // Only use the first 250 characters for metadata generation
+            const messageExcerpt = firstUserMessage.content.substring(0, 250);
+            const response = await axios.post("metadata", {
+              message: messageExcerpt,
+              provider: currentProvider,
+              model: currentModel,
+              apiKey: getApiKey(currentProvider),
+            });
+
+            // Validate response data before processing
+            if (
+              response.data &&
+              typeof response.data.title === "string" &&
+              Array.isArray(response.data.tags)
+            ) {
+              // Additional processing to ensure tags are clean
+              const processedTags = response.data.tags
+                .filter((tag: unknown) => typeof tag === "string") // Ensure only strings
+                .map((tag: string) =>
+                  tag
+                    .toLowerCase()
+                    .replace(/[#@$%^&*()+=[\]{}|\\:";'<>?,./]/g, "") // Remove special characters
+                    .replace(/\s+/g, " ") // Normalize whitespace
+                    .trim()
+                )
+                .filter((tag: string) => tag.length > 0); // Remove empty tags
+
+              // Ensure we have at least some tags
+              if (processedTags.length === 0) {
+                processedTags.push("conversation", "chat", "discussion");
+              }
+
+              // Update the chat with generated metadata
+              await db.chats.update(currentId, {
+                title: response.data.title,
+                tags: processedTags,
+                updatedAt: new Date(),
+              });
+              console.log("Metadata generated successfully:", {
+                title: response.data.title,
+                tags: processedTags,
+              });
+            } else {
+              console.warn("Invalid metadata response format:", response.data);
+            }
+          } catch (metadataError) {
+            console.error("Error generating metadata:", metadataError);
+            // Provide fallback metadata if API fails
+            try {
+              const fallbackTitle =
+                userMessages[0].content.length > 47
+                  ? userMessages[0].content.substring(0, 47) + "..."
+                  : userMessages[0].content;
+
+              await db.chats.update(currentId, {
+                title: fallbackTitle,
+                tags: ["conversation", "chat", "discussion"],
+                updatedAt: new Date(),
+              });
+              console.log("Applied fallback metadata");
+            } catch (fallbackError) {
+              console.error(
+                "Failed to apply fallback metadata:",
+                fallbackError
+              );
+            }
           }
         }
 
