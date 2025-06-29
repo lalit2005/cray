@@ -519,10 +519,10 @@ export function CommandMenu({
                       <FileText className="h-3 w-3" />
                     </span>
                   )}
-                  {chat.tags && chat.tags.length > 0 && (
+                  {chat.tags && chat.tags.length > 10 && (
                     <span className="flex items-center gap-1">
                       <Tag className="h-3 w-3" />
-                      {chat.tags.length}
+                      {chat.tags.length - 10}
                     </span>
                   )}
                   {chat.isPinned ? (

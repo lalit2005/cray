@@ -278,7 +278,7 @@ export const Sidebar = () => {
         <span className="text text-zinc-600 ml-1 relative top-px">v0.1.0</span>
       </h1>
 
-      <div className="mt-6 mb-2">
+      <div className="mt-6 mb-2" id="chats-list-container">
         <div className="flex items-center justify-center">
           <input
             type="text"

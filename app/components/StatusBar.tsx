@@ -71,10 +71,7 @@ function StatusBar() {
 
       // Support both Alt+N (Windows/Linux) and Option+N (Mac)
       // On Mac, Option+N can produce different characters depending on keyboard layout
-      if (
-        (e.altKey && e.key.toLowerCase() === "n") ||
-        (navigator.platform.includes("Mac") && e.altKey && e.key.toLowerCase() == "n")
-      ) {
+      if (e.altKey && e.key.toLowerCase() === "n") {
         e.preventDefault();
 
         // If we're about to close the sidebar, ensure notes are saved first
@@ -403,7 +400,7 @@ function StatusBar() {
                     key={tag}
                     className="bg-zinc-600/70 text-white text-xs px-1.5 py-0.5 rounded flex items-center gap-1"
                   >
-                    <span>#{tag}</span>
+                    <span>{tag}</span>
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
