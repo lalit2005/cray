@@ -108,6 +108,33 @@ export function useChatMessages(chatId: string | null) {
           await db.messages.bulkDelete(emptyAssistantMessages.map((m) => m.id));
         }
 
+        // Also check if we have completed messages followed by loading messages
+        // This fixes the case where a loading "Generating..." message is left after a valid response
+        const allAssistantMessages = await db.messages
+          .where({ chatId, role: "assistant" })
+          .sortBy("createdAt");
+
+        if (allAssistantMessages.length > 1) {
+          // Check if we have non-loading messages (with content) followed by loading ones
+          const hasCompletedMessages = allAssistantMessages.some(
+            (m) => !m.loading && m.content.trim()
+          );
+
+          if (hasCompletedMessages) {
+            // Find any loading messages that need to be cleaned up
+            const loadingMessagesToDelete = allAssistantMessages
+              .filter((m) => m.loading)
+              .map((m) => m.id);
+
+            if (loadingMessagesToDelete.length > 0) {
+              console.log(
+                `Found ${loadingMessagesToDelete.length} loading messages to clean up after completed messages`
+              );
+              await db.messages.bulkDelete(loadingMessagesToDelete);
+            }
+          }
+        }
+
         // Handle duplicate sequential messages - keep only the most recent one
         const allMessages = await db.messages
           .where({ chatId })

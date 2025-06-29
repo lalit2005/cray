@@ -135,6 +135,29 @@ export function useChatInteraction(chatId: string | null, messages: Message[]) {
 
       completionFinishedRef.current = true;
 
+      // Immediately clean up any other loading messages for this chat
+      try {
+        const loadingMessages = await db.messages
+          .where({ chatId: currentId, role: "assistant", loading: true })
+          .toArray();
+
+        if (loadingMessages.length > 0) {
+          // If we're updating one of these, remove the others
+          const msgsToDelete = loadingMessages
+            .filter((m) => m.id !== currentAssistantMessageIdRef.current)
+            .map((m) => m.id);
+
+          if (msgsToDelete.length > 0) {
+            await db.messages.bulkDelete(msgsToDelete);
+            console.log(
+              `Cleaned up ${msgsToDelete.length} loading messages on completion`
+            );
+          }
+        }
+      } catch (cleanupErr) {
+        console.error("Error cleaning up loading messages:", cleanupErr);
+      }
+
       try {
         // Get the assistant message ID that we're currently updating
         const assistantMessageId = currentAssistantMessageIdRef.current;
@@ -156,6 +179,12 @@ export function useChatInteraction(chatId: string | null, messages: Message[]) {
               content: finalContent,
               loading: false,
             });
+
+            // Force-remove loading state from all assistant messages for this chat
+            // This ensures no "Generating..." message persists after completion
+            await db.messages
+              .where({ chatId: currentId, role: "assistant", loading: true })
+              .modify({ loading: false });
 
             // Check for duplicate assistant messages that might have been created
             // This can happen with the first message in a new chat

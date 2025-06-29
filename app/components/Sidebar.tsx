@@ -275,7 +275,9 @@ export const Sidebar = () => {
     <div className="px-4 py-2 relative h-screen sidebar">
       <h1 className="text inline-block mt-3">
         C R A Y
-        <span className="text text-zinc-600 ml-1 relative top-px">v0.1.0</span>
+        <span className="text-transparent bg-gradient-to-r from-zinc-400 to-zinc-700 bg-clip-text ml-1 relative top-px">
+          v0.1.0
+        </span>
       </h1>
 
       <div className="mt-6 mb-2" id="chats-list-container">

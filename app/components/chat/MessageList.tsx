@@ -32,6 +32,20 @@ export const MessageList = memo(function MessageList({
         ) {
           return false;
         }
+        // Remove loading messages when there's a newer non-loading assistant message
+        if (
+          msg.role === "assistant" &&
+          msg.loading &&
+          arr.some(
+            (m, i) =>
+              i > idx &&
+              m.role === "assistant" &&
+              !m.loading &&
+              m.content.trim()
+          )
+        ) {
+          return false;
+        }
         return true;
       }),
     [messages]
