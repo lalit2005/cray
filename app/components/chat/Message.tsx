@@ -27,6 +27,7 @@ export const Message = memo(function Message({ message }: MessageProps) {
     <div
       key={message.id}
       className={clsx(
+        "chat-message",
         "flex",
         message.role === "user" ? "justify-end" : "justify-start"
       )}
