@@ -65,11 +65,7 @@ export const SUPPORTED_MODELS: Record<Providers, string[]> = {
     "claude-3-7-sonnet-20250219",
     "claude-4-sonnet-20250514",
   ],
-  google: [
-    "gemini-2.5-flash-preview-04-17",
-    "gemini-2.5-pro-preview-05-06",
-    "gemini-2.0-flash-lite",
-  ],
+  google: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.0-flash-lite"],
   deepseek: ["deepseek-chat"],
   perplexity: ["sonar", "sonar-pro"],
   openrouter: [
